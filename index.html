@@ -380,7 +380,7 @@ let accessToken = null;
 let worksheetIds = {};  // cache de IDs de worksheets
 
 function initMsal() {
-  if (CLIENT_ID === "5ac47bf0-7fc4-4f70-bda2-465dea37b8c7") return;  // sin config aún
+  if (!CLIENT_ID || CLIENT_ID.length < 10) return;
   try {
     msalInstance = new msal.PublicClientApplication(msalConfig);
     // Manejar redirect de vuelta
