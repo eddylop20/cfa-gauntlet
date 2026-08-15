@@ -297,6 +297,16 @@ body::before {
       <div class="b-meta">Standards vecinos</div>
       <div class="b-badge">Hardcore</div>
     </button>
+    <button class="block-btn" data-block="Ethics2027" data-tema="Ethics & Professional Standards" onclick="selectBlock(this)">
+      <div class="b-name">Ethics — Full QBank</div>
+      <div class="b-meta">Todo el QBank 2027 · con LOS</div>
+      <div class="b-badge">~400 preguntas</div>
+    </button>
+    <button class="block-btn" data-block="FSA2027" data-tema="Financial Statement Analysis" onclick="selectBlock(this)">
+      <div class="b-name">FSA — Full QBank</div>
+      <div class="b-meta">Todo el QBank 2027 · con LOS</div>
+      <div class="b-badge">~480 preguntas</div>
+    </button>
   </div>
 
   <button class="start-btn" id="start-btn" onclick="startGame()" disabled>Elegí un bloque para arrancar</button>
@@ -498,6 +508,82 @@ async function getWorksheetId(sheetName, sessionHeader) {
   return worksheetIds[sheetName];
 }
 
+// Próxima fila libre, mirando solo la columna A (Fecha) — evita el problema de usedRange
+// inflado por formato "fantasma" en otras columnas más abajo (ya nos pasó en 📝 Sesiones).
+async function getNextDataRow(wsId, sessionHeader) {
+  const usedA = await graphCall(
+    `/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/worksheets/${wsId}/range(address='A:A')/usedRange?$select=rowCount`,
+    "GET", null, sessionHeader
+  ).catch(() => null);
+  return (usedA?.rowCount || 2) + 1;
+}
+
+async function appendErroresRows(errores, sessionHeader) {
+  if (!errores.length) return;
+  const wsId = await getWorksheetId("❌ Errores", sessionHeader);
+  if (!wsId) throw new Error("Worksheet '❌ Errores' no encontrado");
+  const nextRow = await getNextDataRow(wsId, sessionHeader);
+  const today = new Date().toISOString().split("T")[0];
+
+  const rows = errores.map(e => [
+    today,
+    e.tema,
+    e.subtema || "",
+    "Conceptual",
+    `Gauntlet · ${e.block} · ${e.id}: ${e.questionText.slice(0, 120)}`,
+    e.chosenText,
+    e.anchor,
+    "No",
+    0,
+    "Pendiente"
+  ]);
+  const rangeAddr = `A${nextRow}:J${nextRow + rows.length - 1}`;
+  await graphCall(
+    `/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/worksheets/${wsId}/range(address='${rangeAddr}')`,
+    "PATCH",
+    { values: rows },
+    sessionHeader
+  );
+}
+
+// responses_log.csv vive suelto en la carpeta (no es parte del workbook) — se lee y reescribe entero.
+function csvField(v) {
+  const s = String(v ?? "");
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+const RESPONSES_LOG_PATH = "CFA/responses_log.csv";
+const RESPONSES_LOG_FIELDS = ["fecha","question_id","source","topic","los_code","correcto","confianza","sesion_id","trampa"];
+
+async function appendResponsesLog(rows, sesionId) {
+  if (!rows.length) return;
+  let existing = "";
+  const getResp = await fetch(`${GRAPH}/me/drive/root:/${RESPONSES_LOG_PATH}:/content`, {
+    headers: { "Authorization": "Bearer " + accessToken }
+  });
+  if (getResp.ok) existing = await getResp.text();
+  else if (getResp.status !== 404) throw new Error(`No se pudo leer responses_log.csv (HTTP ${getResp.status})`);
+
+  let out = existing;
+  if (!out) out = RESPONSES_LOG_FIELDS.join(",") + "\r\n";
+  else if (!/\r?\n$/.test(out)) out += "\r\n";
+
+  rows.forEach(r => {
+    const record = {
+      fecha: r.fecha, question_id: r.questionId, source: "live", topic: r.tema,
+      los_code: r.losCode || "", correcto: r.correct ? "True" : "False",
+      confianza: "", sesion_id: sesionId, trampa: "False"
+    };
+    out += RESPONSES_LOG_FIELDS.map(f => csvField(record[f])).join(",") + "\r\n";
+  });
+
+  const putResp = await fetch(`${GRAPH}/me/drive/root:/${RESPONSES_LOG_PATH}:/content`, {
+    method: "PUT",
+    headers: { "Authorization": "Bearer " + accessToken, "Content-Type": "text/csv" },
+    body: out
+  });
+  if (!putResp.ok) throw new Error(`No se pudo guardar responses_log.csv (HTTP ${putResp.status})`);
+}
+
 async function logSessionToExcel(sessionData, isRetry = false) {
   updateSyncBadge('syncing');
   try {
@@ -506,13 +592,7 @@ async function logSessionToExcel(sessionData, isRetry = false) {
     // Obtener ID del worksheet Sesiones
     const wsId = await getWorksheetId("📝 Sesiones", sessionHeader);
     if (!wsId) throw new Error("Worksheet '📝 Sesiones' no encontrado");
-
-    // Obtener rango usado para saber la última fila
-    const usedRange = await graphCall(
-      `/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/worksheets/${wsId}/usedRange?$select=rowCount`,
-      "GET", null, sessionHeader
-    );
-    const nextRow = usedRange.rowCount + 1;
+    const nextRow = await getNextDataRow(wsId, sessionHeader);
 
     // Preparar fila de datos
     const today = new Date().toISOString().split("T")[0];
@@ -543,8 +623,21 @@ async function logSessionToExcel(sessionData, isRetry = false) {
       sessionHeader
     );
 
+    // Errores + responses_log — alimentan tu pipeline real (LOS Breakdown, Dashboard, Repaso, Triage vía recalc.py)
+    const sesionId = `gauntlet_${today}_${Date.now()}`;
+    const responses = sessionData.responses || [];
+    const misses = responses.filter(r => !r.correct);
+    let errorCount = 0;
+    if (misses.length) {
+      await appendErroresRows(misses, sessionHeader);
+      errorCount = misses.length;
+    }
+    if (responses.length) {
+      await appendResponsesLog(responses, sesionId);
+    }
+
     updateSyncBadge('online');
-    return { ok: true };
+    return { ok: true, errorCount };
   } catch(e) {
     console.error("Sync error:", e);
     // Timeout de arranque en frío del workbook — la sesión suele quedar inválida, se descarta y se reintenta una vez
@@ -655,13 +748,77 @@ BANK.Mix = [
 ];
 
 // ══════════════════════════════════════════════════════
+// QBANK 2027 — banco completo, leído en vivo desde OneDrive (privado)
+// Solo preguntas con module_los, así alimentan LOS Breakdown de verdad.
+// ══════════════════════════════════════════════════════
+const QBANK_2027_SOURCES = {
+  Ethics2027: {
+    tema: "Ethics & Professional Standards",
+    label: "Ethics — Full QBank",
+    files: [
+      "Cuestionario/Preguntas/ETICA/Etica_2027_R93-95.json",
+      "Cuestionario/Preguntas/ETICA/Etica_2027_R96-100.json",
+      "Cuestionario/Preguntas/ETICA/Etica_2027_R101-102.json"
+    ]
+  },
+  FSA2027: {
+    tema: "Financial Statement Analysis",
+    label: "FSA — Full QBank",
+    files: [
+      "Cuestionario/Preguntas/FSA/FSA_2027_R27-29.json",
+      "Cuestionario/Preguntas/FSA/FSA_2027_R30-36.json",
+      "Cuestionario/Preguntas/FSA/FSA_2027_R37-38.json"
+    ]
+  }
+};
+
+async function graphGetJsonFile(path) {
+  const resp = await fetch(`${GRAPH}/me/drive/root:/CFA/${path}:/content`, {
+    headers: { "Authorization": "Bearer " + accessToken }
+  });
+  if (!resp.ok) throw new Error(`No se pudo leer ${path} (HTTP ${resp.status})`);
+  return resp.json();
+}
+
+async function loadQBankTopic(blockKey) {
+  const cacheKey = "gauntlet_qbank_" + blockKey;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    try { return JSON.parse(cached); } catch(e) {}
+  }
+  const src = QBANK_2027_SOURCES[blockKey];
+  const questions = [];
+  for (const path of src.files) {
+    const raw = await graphGetJsonFile(path);
+    raw.forEach(q => {
+      if (!q.module_los || !Array.isArray(q.options)) return;
+      const correctIdx = q.options.findIndex(o => o.correct);
+      if (correctIdx < 0) return;
+      questions.push({
+        id: "K" + q.question_id,
+        questionId: q.question_id,
+        topic: q.module_los,
+        tema: src.tema,
+        subtema: q.module_los,
+        text: q.question,
+        opts: q.options.map(o => o.text),
+        correct: correctIdx,
+        anchor: q.explanation
+      });
+    });
+  }
+  localStorage.setItem(cacheKey, JSON.stringify(questions));
+  return questions;
+}
+
+// ══════════════════════════════════════════════════════
 // GAME STATE
 // ══════════════════════════════════════════════════════
 const QUESTIONS_PER_ROUND = 5;
 let state = {
   block: null, blockTema: null, questions: [], current: 0,
   lives: 3, streak: 0, bestStreak: 0, xp: 0,
-  dots: [], missed: [], answered: false,
+  dots: [], missed: [], responses: [], answered: false,
   startTime: null
 };
 
@@ -747,15 +904,37 @@ function pickRoundQuestions(block) {
   return round;
 }
 
-function startGame() {
+async function startGame() {
   if (!state.block) return;
+
+  if (QBANK_2027_SOURCES[state.block] && !BANK[state.block]) {
+    if (!accessToken) {
+      alert('Este bloque trae el QBank completo desde tu OneDrive — conectá tu cuenta primero (arriba a la derecha).');
+      return;
+    }
+    const sb = document.getElementById('start-btn');
+    const prevText = sb.textContent;
+    sb.disabled = true;
+    sb.textContent = '⟳ Cargando preguntas...';
+    try {
+      BANK[state.block] = await loadQBankTopic(state.block);
+    } catch(e) {
+      alert('No se pudo cargar el banco de preguntas: ' + e.message);
+      sb.disabled = false;
+      sb.textContent = prevText;
+      return;
+    }
+    sb.disabled = false;
+    sb.textContent = prevText;
+  }
+
   state.questions = pickRoundQuestions(state.block);
   state.current = 0; state.lives = 3; state.streak = 0;
-  state.bestStreak = 0; state.xp = 0; state.missed = [];
+  state.bestStreak = 0; state.xp = 0; state.missed = []; state.responses = [];
   state.dots = state.questions.map(() => 'pending');
   state.startTime = Date.now();
   document.getElementById('block-label').textContent =
-    state.block === 'Ethics2' ? 'Ethics — Trampas' : state.block;
+    QBANK_2027_SOURCES[state.block]?.label || (state.block === 'Ethics2' ? 'Ethics — Trampas' : state.block);
   show('screen-game');
   updateHUD(); loadQuestion();
 }
@@ -799,6 +978,13 @@ function handleAnswer(idx, btn) {
   allBtns.forEach(b => b.disabled = true);
   allBtns[q.correct].classList.add('correct');
   if (!isOk) btn.classList.add('wrong');
+
+  state.responses.push({
+    id: q.id, questionId: q.questionId || q.id, losCode: q.losCode || (QBANK_2027_SOURCES[state.block] ? q.topic : null),
+    tema: state.blockTema, subtema: q.subtema || q.topic, block: state.block,
+    correct: isOk, chosenText: q.opts[idx], correctText: q.opts[q.correct],
+    questionText: q.text, anchor: q.anchor, fecha: new Date().toISOString().split('T')[0]
+  });
 
   if (isOk) {
     state.streak++;
@@ -887,12 +1073,15 @@ async function showResults() {
       block: state.block,
       tema: state.blockTema || "Financial Statement Analysis",
       subtema: `Gauntlet — ${state.block}`,
-      total, correct, minutes
+      total, correct, minutes,
+      responses: state.responses
     });
 
     if (result.ok) {
       syncEl.className = 'sync-result ok';
-      syncEl.innerHTML = '✓ Sesión guardada en CFA_Tutor_v1_clean.xlsx — visible en el dashboard.';
+      syncEl.innerHTML = result.errorCount
+        ? `✓ Sesión + ${result.errorCount} error${result.errorCount > 1 ? 'es' : ''} guardados en el tracker (Sesiones, Errores, LOS Breakdown).`
+        : '✓ Sesión guardada en CFA_Tutor_v1_clean.xlsx — visible en el dashboard.';
     } else {
       syncEl.className = 'sync-result err';
       syncEl.innerHTML = `⚠️ No se pudo sincronizar: ${result.error}. Reconectá la cuenta desde el badge superior.`;
