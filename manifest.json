@@ -1,0 +1,15 @@
+{
+  "name": "CFA Gauntlet",
+  "short_name": "Gauntlet",
+  "description": "CFA Level I · Error Drill — quiz de repaso con sync a OneDrive",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0b18",
+  "theme_color": "#0b0b18",
+  "icons": [
+    { "src": "icon.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
