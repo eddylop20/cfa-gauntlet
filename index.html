@@ -314,6 +314,7 @@ body::before {
   </div>
 
   <div class="block-hdr" style="width:100%;max-width:640px;">
+    <button id="exit-btn" onclick="exitGame()" title="Salir del bloque" style="background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;padding:0 8px 0 0;line-height:1;">←</button>
     <div class="bh-name" id="block-label">Ethics</div>
     <div class="progress-dots" id="progress-dots"></div>
   </div>
@@ -563,85 +564,85 @@ async function logSessionToExcel(sessionData, isRetry = false) {
 const BANK = {
   Ethics: [
     { id:"Q150", topic:"I(C) vs III(D)", tema:"Ethics & Professional Standards", subtema:"Standard I",
-      text:"Un analista incluye retornos históricos inflados de su cartera anterior en el pitch deck de la firma. ¿Qué Standards viola?",
-      opts:["Solo I(B) — Independence and Objectivity","Solo I(C) — Misrepresentation","Solo III(D) — Performance Presentation","Tanto I(C) como III(D) — violación dual"],
-      correct:3, anchor:"Trampa clásica: cuando el dato de performance es falso caen ambos. I(C) por la mentira; III(D) porque el performance no es fair, accurate y complete. El examen los usa como distractores entre sí." },
+      text:"An analyst includes inflated historical returns from their previous portfolio in the firm's pitch deck. Which Standards does this violate?",
+      opts:["Only I(B) — Independence and Objectivity","Only I(C) — Misrepresentation","Only III(D) — Performance Presentation","Both I(C) and III(D) — dual violation"],
+      correct:3, anchor:"Classic trap: when the performance data is false, both apply. I(C) for the misrepresentation itself; III(D) because the performance isn't fair, accurate, and complete. The exam uses them as distractors against each other." },
     { id:"Q8", topic:"MNPI — Tippee chain", tema:"Ethics & Professional Standards", subtema:"Standard II",
-      text:"El hermano de un empleado escuchó sin querer una conversación sobre resultados aún no publicados. Si opera con esa información, ¿viola Standard II(A)?",
-      opts:["No — no recibió la información directamente del insider","No — no es empleado de la firma ni firmó NDA","Sí — la cadena de tippee aplica sin importar cómo llegó la información","Solo si sabía con certeza que era información confidencial"],
-      correct:2, anchor:"MNPI aplica a toda la cadena tippee. Sin importar el número de eslabones ni si fue intencional — si es material y no pública, la regla aplica." },
+      text:"An employee's brother overhears a conversation about not-yet-published results. If he trades on that information, does he violate Standard II(A)?",
+      opts:["No — he didn't receive the information directly from the insider","No — he isn't an employee of the firm and didn't sign an NDA","Yes — the tippee chain applies regardless of how the information was received","Only if he knew with certainty that it was confidential information"],
+      correct:2, anchor:"MNPI applies to the entire tippee chain. Regardless of the number of links or whether it was intentional — if it's material and non-public, the rule applies." },
     { id:"Q62", topic:"Standard IV(B)", tema:"Ethics & Professional Standards", subtema:"Standard IV",
-      text:"Un cliente ofrece un bono por superar el benchmark. ¿Qué exige Standard IV(B)?",
-      opts:["Rechazar la compensación inmediatamente","Aceptar solo si el bono es en efectivo","Revelar el acuerdo al empleador y obtener aprobación escrita","Rechazarlo a menos que el empleador apruebe previo a la oferta"],
-      correct:2, anchor:"IV(B) NO exige rechazar. Solo exige divulgar y obtener aprobación. Es una regla de transparencia, no de prohibición." },
+      text:"A client offers a bonus for beating the benchmark. What does Standard IV(B) require?",
+      opts:["Reject the compensation immediately","Accept only if the bonus is paid in cash","Disclose the arrangement to the employer and obtain written consent","Reject it unless the employer approves before the offer is made"],
+      correct:2, anchor:"IV(B) does NOT require rejecting it. It only requires disclosure and consent. It's a transparency rule, not a prohibition rule." },
     { id:"Q29", topic:"Access person", tema:"Ethics & Professional Standards", subtema:"Standard IV",
-      text:"¿Qué define a un 'access person' bajo Standard IV?",
-      opts:["Todo empleado con acceso físico al sistema de trading","Solo directores y gerentes de nivel C","El rol funcional que desempeña, sin importar la jerarquía formal","Cualquier persona con acceso a datos de clientes"],
-      correct:2, anchor:"Access person = rol, no jerarquía. Un research supervisor es access person aunque no sea manager. El examen usa la confusión jerarquía/rol como distractor directo." },
+      text:"What defines an 'access person' under Standard IV?",
+      opts:["Any employee with physical access to the trading system","Only C-level directors and managers","The functional role they perform, regardless of formal hierarchy","Anyone with access to client data"],
+      correct:2, anchor:"Access person = role, not hierarchy. A research supervisor is an access person even without being a manager. The exam uses the role/hierarchy confusion as a direct distractor." },
     { id:"Q135", topic:"VII(A) vs VII(B)", tema:"Ethics & Professional Standards", subtema:"Standard VII",
-      text:"Un candidato CFA hace trampa durante el examen. ¿Qué Standard viola?",
+      text:"A CFA candidate cheats during the exam. Which Standard does this violate?",
       opts:["VII(A) — Conduct as Members and Candidates in the CFA Program","VII(B) — Reference to CFA Institute, Designation, and Program","I(D) — Misconduct","I(A) — Knowledge of the Law"],
-      correct:0, anchor:"VII(B) regula cómo se usa el título. La conducta DURANTE el examen es VII(A). Son vecinos que el examen explota deliberadamente como distractor." },
+      correct:0, anchor:"VII(B) governs how the designation is used. Conduct DURING the exam is VII(A). They're neighboring Standards that the exam deliberately exploits as distractors." },
     { id:"Q177", topic:"Code of Ethics — ICDR", tema:"Ethics & Professional Standards", subtema:"Code of Ethics",
-      text:"¿Cuál es el acrónimo correcto de los valores del CFA Code of Ethics?",
+      text:"What is the correct acronym for the values in the CFA Code of Ethics?",
       opts:["HIRE — Honesty, Integrity, Respect, Ethics","ICDR — Integrity, Competence, Diligence, Respect","CARE — Competence, Accountability, Respect, Ethics","EPIC — Ethics, Professionalism, Integrity, Competence"],
-      correct:1, anchor:"ICDR: Integrity, Competence, Diligence, Respect. 'Honesty' y 'Ethics' son distractores que no aparecen en el acrónimo." },
+      correct:1, anchor:"ICDR: Integrity, Competence, Diligence, Respect. 'Honesty' and 'Ethics' are distractors that don't appear in the acronym." },
     { id:"Q115", topic:"I(D) — Misconduct", tema:"Ethics & Professional Standards", subtema:"Standard I",
-      text:"Un analista publicó datos falsos. Al día siguiente emitió una corrección pública completa. ¿Sigue siendo violación de I(D)?",
-      opts:["No — la corrección oportuna borra la violación","No — solo aplica si hubo daño económico demostrable","Sí — la corrección posterior no elimina la violación original","Depende de si el error fue intencional o involuntario"],
-      correct:2, anchor:"La violación ocurrió al publicar datos falsos. Corregirla después es correcto, pero no revierte el hecho de que la violación existió. 'Posterior correction' es el distractor clásico." }
+      text:"An analyst published false data. The next day, they issued a full public correction. Is this still a violation of I(D)?",
+      opts:["No — a timely correction erases the violation","No — it only applies if there was demonstrable economic harm","Yes — a later correction doesn't eliminate the original violation","It depends on whether the error was intentional or unintentional"],
+      correct:2, anchor:"The violation occurred when the false data was published. Correcting it afterward is the right thing to do, but it doesn't reverse the fact that the violation happened. 'Subsequent correction' is the classic distractor." }
   ],
   FSA: [
-    { id:"FSA-01", topic:"DTA — Origen", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
-      text:"¿En cuál de estas situaciones surge un Deferred Tax Asset (DTA)?",
-      opts:["Cuando el ingreso gravable es mayor que el ingreso contable en el período actual","Cuando se usa depreciación acelerada para efectos fiscales","Cuando el tax expense contable > taxes payable (diferencia temporaria imponible → DTL)","Cuando la tasa fiscal efectiva supera la tasa statutory"],
-      correct:0, anchor:"Ingreso gravable > ingreso contable → taxes payable > tax expense → pagás MÁS impuesto en cash de lo que el IS reconoce → DTA (recuperás después). Trampa: opción B (depreciación acelerada) crea DTL. Opción C describe un DTL. [CFA 2027 V4: 'a deferred tax asset arises because of an excess amount paid for taxes (when taxable income is greater than accounting profit)']" },
-    { id:"FSA-02", topic:"DTL — Depreciación acelerada", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
-      text:"Una empresa usa depreciación acelerada fiscal y lineal en contabilidad. Al inicio del activo, ¿qué aparece en el balance?",
-      opts:["DTA — porque el ingreso contable es menor que el gravable","DTL — porque el ingreso contable es mayor que el gravable","Nada — es una diferencia permanente","Depende de si el activo es fijo o intangible"],
-      correct:1, anchor:"Depreciación acelerada fiscal → más deducción ahora → menos impuesto hoy → pero pagarás más después. Esa obligación futura = DTL." },
-    { id:"FSA-03", topic:"Diferencia permanente", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
-      text:"¿Cuál de estos es una diferencia PERMANENTE?",
-      opts:["Depreciación acelerada vs lineal entre fiscal y contable","Garantías reconocidas contablemente pero deducibles al pagarse","Multas legales no deducibles fiscalmente","Ingresos diferidos reconocidos antes de ser gravados"],
-      correct:2, anchor:"Las multas nunca serán deducibles — no hay reversión futura. Sin reversión = diferencia permanente = sin DTA/DTL. Solo mueve la effective rate." },
+    { id:"FSA-01", topic:"DTA — Origin", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
+      text:"In which of these situations does a Deferred Tax Asset (DTA) arise?",
+      opts:["When taxable income is greater than accounting income in the current period","When accelerated depreciation is used for tax purposes","When accounting tax expense > taxes payable (taxable temporary difference → DTL)","When the effective tax rate exceeds the statutory rate"],
+      correct:0, anchor:"Taxable income > accounting income → taxes payable > tax expense → you pay MORE tax in cash than the income statement recognizes → DTA (recovered later). Trap: option B (accelerated depreciation) creates a DTL. Option C describes a DTL. [CFA 2027 V4: 'a deferred tax asset arises because of an excess amount paid for taxes (when taxable income is greater than accounting profit)']" },
+    { id:"FSA-02", topic:"DTL — Accelerated Depreciation", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
+      text:"A company uses accelerated depreciation for tax purposes and straight-line for accounting. At the start of the asset's life, what appears on the balance sheet?",
+      opts:["DTA — because accounting income is lower than taxable income","DTL — because accounting income is higher than taxable income","Nothing — it's a permanent difference","It depends on whether the asset is fixed or intangible"],
+      correct:1, anchor:"Accelerated tax depreciation → more deduction now → less tax today → but more tax paid later. That future obligation = DTL." },
+    { id:"FSA-03", topic:"Permanent Difference", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
+      text:"Which of these is a PERMANENT difference?",
+      opts:["Accelerated vs. straight-line depreciation between tax and accounting books","Warranties recognized for accounting purposes but deductible only when paid","Legal fines that are not tax-deductible","Deferred revenue recognized before it's taxed"],
+      correct:2, anchor:"Fines will never be deductible — there's no future reversal. No reversal = permanent difference = no DTA/DTL. It only shifts the effective rate." },
     { id:"FSA-04", topic:"Valuation Allowance", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
-      text:"Una empresa tiene DTA de $200K pero es improbable que tenga suficiente ingreso futuro para usarlo. ¿Qué hace bajo US GAAP?",
-      opts:["Eliminar el DTA del balance sheet completamente","Crear una Valuation Allowance que reduce el DTA neto","Reclasificar el DTA como DTL","Dejarlo sin cambios — se ajusta automáticamente"],
-      correct:1, anchor:"GAAP: VA reduce el DTA neto sin eliminarlo. IFRS: directamente no reconocés el DTA. VA sube → Tax Expense sube (no baja)." },
+      text:"A company has a $200K DTA but is unlikely to have enough future income to use it. What does it do under US GAAP?",
+      opts:["Eliminate the DTA from the balance sheet entirely","Create a Valuation Allowance that reduces the net DTA","Reclassify the DTA as a DTL","Leave it unchanged — it adjusts automatically"],
+      correct:1, anchor:"GAAP: the VA reduces the net DTA without eliminating it. IFRS: the DTA simply isn't recognized at all. VA increases → Tax Expense increases (not decreases)." },
     { id:"FSA-05", topic:"Tax Rate Change", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
-      text:"La tasa sube del 25% al 30%. La empresa tiene DTL de $80. ¿Qué pasa?",
-      opts:["El DTL aumenta — revaluado inmediatamente a la nueva tasa","El DTL disminuye — mayor tasa reduce el pasivo diferido","El DTL no cambia — se fija a la tasa del período de origen","El DTL se cancela y se registra uno nuevo"],
-      correct:0, anchor:"DTA y DTL se revalúan inmediatamente cuando cambia la tasa. El ajuste va a Tax Expense del período actual — no a OCI ni retained earnings." },
+      text:"The tax rate rises from 25% to 30%. The company has a DTL of $80. What happens?",
+      opts:["The DTL increases — immediately revalued at the new rate","The DTL decreases — a higher rate reduces the deferred liability","The DTL stays the same — locked in at the rate from the period it originated","The DTL is canceled and a new one is recorded"],
+      correct:0, anchor:"DTAs and DTLs are immediately revalued when the rate changes. The adjustment goes to Tax Expense in the current period — not to OCI or retained earnings." },
     { id:"FSA-06", topic:"Effective vs Statutory Rate", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
-      text:"La tasa statutory es 30%. La empresa tiene dividendos exentos de impuesto. Su effective rate resultó 22%. ¿Por qué?",
-      opts:["Diferencia temporaria deducible — genera DTA en el futuro","Diferencia temporaria imponible — genera DTL","Diferencia permanente — sin DTA/DTL, solo mueve la effective rate","La tasa effective siempre converge a la statutory en el largo plazo"],
-      correct:2, anchor:"Ingresos exentos = diferencia permanente. Reducen el impuesto real sin crear activos/pasivos diferidos. Effective rate < Statutory rate — brecha permanente." }
+      text:"The statutory rate is 30%. The company has tax-exempt dividend income. Its effective rate came out to 22%. Why?",
+      opts:["Deductible temporary difference — generates a DTA in the future","Taxable temporary difference — generates a DTL","Permanent difference — no DTA/DTL, it only shifts the effective rate","The effective rate always converges to the statutory rate in the long run"],
+      correct:2, anchor:"Tax-exempt income = permanent difference. It reduces actual tax owed without creating deferred assets/liabilities. Effective rate < Statutory rate — a permanent gap." }
   ],
   Ethics2: [
-    { id:"ET2-01", topic:"I(B) — Independencia", tema:"Ethics & Professional Standards", subtema:"Standard I",
-      text:"Un analista recibe presión de su gerente para cambiar su recomendación a Buy en una acción que califica como Sell. Si cede, ¿qué viola principalmente?",
+    { id:"ET2-01", topic:"I(B) — Independence", tema:"Ethics & Professional Standards", subtema:"Standard I",
+      text:"An analyst is pressured by their manager to change a recommendation to Buy on a stock that qualifies as a Sell. If they give in, what do they primarily violate?",
       opts:["I(A) — Knowledge of the Law","I(B) — Independence and Objectivity","III(B) — Fair Dealing","VI(A) — Disclosure of Conflicts"],
-      correct:1, anchor:"Presión interna que compromete la objetividad = I(B). I(A) aplica cuando se viola una ley, no cuando hay presión corporativa sobre una opinión profesional." },
+      correct:1, anchor:"Internal pressure that compromises objectivity = I(B). I(A) applies when a law is violated, not when there's corporate pressure on a professional opinion." },
     { id:"ET2-02", topic:"VI(B) — Priority of Transactions", tema:"Ethics & Professional Standards", subtema:"Standard VI",
-      text:"Un analista usa el modelo propietario de su firma (no público) para operaciones personales antes que los clientes. ¿Qué viola?",
+      text:"An analyst uses the firm's proprietary (non-public) model for personal trades ahead of clients. What does this violate?",
       opts:["II(A) — Material Nonpublic Information","II(B) — Market Manipulation","VI(B) — Priority of Transactions","IV(A) — Loyalty"],
-      correct:2, anchor:"El problema es que antepone sus operaciones a las de los clientes usando info interna. Eso es VI(B) Priority. II(A) aplica a información de terceros, no a modelos propios." },
+      correct:2, anchor:"The problem is putting their own trades ahead of clients' using internal information. That's VI(B) Priority. II(A) applies to third-party information, not to a firm's own proprietary models." },
     { id:"ET2-03", topic:"III(C) — Suitability", tema:"Ethics & Professional Standards", subtema:"Standard III",
-      text:"Un PM concentra el 40% de cada cartera en una sola acción volátil sin importar el perfil de riesgo del cliente. ¿Qué viola?",
+      text:"A PM concentrates 40% of every portfolio in a single volatile stock regardless of each client's risk profile. What does this violate?",
       opts:["III(A) — Loyalty, Prudence, and Care","III(C) — Suitability","III(B) — Fair Dealing","VI(C) — Referral Fees"],
-      correct:1, anchor:"Suitability (III(C)) exige que las inversiones sean apropiadas para el perfil de cada cliente. III(A) es sobre el deber fiduciario en general — más amplio." },
+      correct:1, anchor:"Suitability (III(C)) requires investments to be appropriate for each client's profile. III(A) is about the fiduciary duty in general — broader in scope." },
     { id:"ET2-04", topic:"V(A) — Diligence", tema:"Ethics & Professional Standards", subtema:"Standard V",
-      text:"Un analista publica un informe sin hacer análisis de la industria ni revisar estados financieros recientes. ¿Qué viola?",
+      text:"An analyst publishes a report without performing any industry analysis or reviewing recent financial statements. What does this violate?",
       opts:["V(A) — Diligence and Reasonable Basis","V(B) — Communication with Clients","I(C) — Misrepresentation","III(D) — Performance Presentation"],
-      correct:0, anchor:"Sin análisis suficiente = V(A). V(B) aplica cuando el formato de comunicación es incorrecto, no cuando directamente falta el trabajo previo." },
-    { id:"ET2-05", topic:"VII(B) — Uso misleading del título", tema:"Ethics & Professional Standards", subtema:"Standard VII",
-      text:"Un charterholder publica en LinkedIn: 'Pronto seré CFA charterholder — pendiente de aprobar el examen'. Tiene actualmente la designación. ¿Viola algo?",
-      opts:["No — es solo una expresión personal en redes","Sí — VII(A): conducta que desacredita la designación","Sí — VII(B): uso engañoso o misleading de la designación CFA","Sí — I(C): misrepresentation sobre su estado profesional"],
-      correct:2, anchor:"Decir 'pronto será CFA' siendo ya charterholder crea una imagen falsa. Eso es VII(B). VII(A) cubre la conducta durante el proceso del examen." },
+      correct:0, anchor:"Insufficient analysis = V(A). V(B) applies when the format of the communication is wrong, not when the underlying work itself is simply missing." },
+    { id:"ET2-05", topic:"VII(B) — Misleading Use of Designation", tema:"Ethics & Professional Standards", subtema:"Standard VII",
+      text:"A charterholder posts on LinkedIn: 'Soon to be a CFA charterholder — pending exam results.' They currently hold the designation. Does this violate anything?",
+      opts:["No — it's just a personal statement on social media","Yes — VII(A): conduct that discredits the designation","Yes — VII(B): misleading use of the CFA designation","Yes — I(C): misrepresentation about their professional status"],
+      correct:2, anchor:"Saying 'soon to be a CFA' while already being a charterholder creates a false impression. That's VII(B). VII(A) covers conduct during the exam process itself." },
     { id:"ET2-06", topic:"VI(C) — Referral Fees", tema:"Ethics & Professional Standards", subtema:"Standard VI",
-      text:"Un analista recibe honorarios de referral de un broker por cada cliente derivado, sin revelarlo. ¿Qué viola?",
+      text:"An analyst receives referral fees from a broker for every client referred, without disclosing it. What does this violate?",
       opts:["VI(A) — Disclosure of Conflicts","VI(B) — Priority of Transactions","VI(C) — Referral Fees","IV(B) — Additional Compensation Arrangements"],
-      correct:2, anchor:"Referral fees no revelados = VI(C) específicamente. Cuando existe la norma específica (VI(C)), prevalece sobre la general (VI(A)). El examen explota esto." }
+      correct:2, anchor:"Undisclosed referral fees = VI(C) specifically. When a specific rule exists (VI(C)), it takes precedence over the general one (VI(A)). The exam exploits this." }
   ]
 };
 BANK.Mix = [
@@ -725,10 +726,30 @@ function selectBlock(btn) {
   sb.textContent = '▶  Empezar — ' + btn.querySelector('.b-name').textContent;
 }
 
+// Evita repetir preguntas hasta agotar el bloque — prioriza las no vistas, recicla cuando ya no alcanzan
+function getSeenIds(block) {
+  try { return JSON.parse(localStorage.getItem('gauntlet_seen_' + block) || '[]'); } catch(e) { return []; }
+}
+function markSeen(block, ids) {
+  const seen = new Set([...getSeenIds(block), ...ids]);
+  localStorage.setItem('gauntlet_seen_' + block, JSON.stringify([...seen]));
+}
+function pickRoundQuestions(block) {
+  const pool = BANK[block] || [];
+  const seen = new Set(getSeenIds(block));
+  let unseen = pool.filter(q => !seen.has(q.id));
+  if (unseen.length < QUESTIONS_PER_ROUND) {
+    localStorage.removeItem('gauntlet_seen_' + block);
+    unseen = pool;
+  }
+  const round = shuffle(unseen).slice(0, QUESTIONS_PER_ROUND);
+  markSeen(block, round.map(q => q.id));
+  return round;
+}
+
 function startGame() {
   if (!state.block) return;
-  const pool = BANK[state.block] || [];
-  state.questions = shuffle(pool).slice(0, QUESTIONS_PER_ROUND);
+  state.questions = pickRoundQuestions(state.block);
   state.current = 0; state.lives = 3; state.streak = 0;
   state.bestStreak = 0; state.xp = 0; state.missed = [];
   state.dots = state.questions.map(() => 'pending');
@@ -737,6 +758,12 @@ function startGame() {
     state.block === 'Ethics2' ? 'Ethics — Trampas' : state.block;
   show('screen-game');
   updateHUD(); loadQuestion();
+}
+
+function exitGame() {
+  if (confirm('¿Salir del bloque? Se pierde el progreso de esta ronda.')) {
+    goToStart();
+  }
 }
 
 function loadQuestion() {
