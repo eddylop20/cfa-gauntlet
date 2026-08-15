@@ -443,13 +443,14 @@ function updateSyncBadge(state) {
 // ══════════════════════════════════════════════════════
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
-async function graphCall(endpoint, method = "GET", body = null) {
+async function graphCall(endpoint, method = "GET", body = null, extraHeaders = {}) {
   if (!accessToken) throw new Error("No token");
   const resp = await fetch(GRAPH + endpoint, {
     method,
     headers: {
       "Authorization": "Bearer " + accessToken,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...extraHeaders
     },
     body: body ? JSON.stringify(body) : null
   });
@@ -461,23 +462,41 @@ async function graphCall(endpoint, method = "GET", body = null) {
   return resp.json();
 }
 
-async function getWorksheetId(sheetName) {
+// Sesión persistente de Excel — evita que cada llamada "despierte" el workbook desde cero
+// (el archivo tiene fórmulas pesadas y sin sesión el primer request suele expirar por timeout)
+let workbookSessionId = null;
+
+async function getWorkbookSession() {
+  if (workbookSessionId) return workbookSessionId;
+  const session = await graphCall(
+    `/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/createSession`,
+    "POST",
+    { persistChanges: true }
+  );
+  workbookSessionId = session.id;
+  return workbookSessionId;
+}
+
+async function getWorksheetId(sheetName, sessionHeader) {
   if (worksheetIds[sheetName]) return worksheetIds[sheetName];
-  const data = await graphCall(`/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/worksheets`);
+  const data = await graphCall(`/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/worksheets`, "GET", null, sessionHeader);
   data.value.forEach(ws => { worksheetIds[ws.name] = ws.id; });
   return worksheetIds[sheetName];
 }
 
-async function logSessionToExcel(sessionData) {
+async function logSessionToExcel(sessionData, isRetry = false) {
   updateSyncBadge('syncing');
   try {
+    const sessionHeader = { "workbook-session-id": await getWorkbookSession() };
+
     // Obtener ID del worksheet Sesiones
-    const wsId = await getWorksheetId("📝 Sesiones");
+    const wsId = await getWorksheetId("📝 Sesiones", sessionHeader);
     if (!wsId) throw new Error("Worksheet '📝 Sesiones' no encontrado");
 
     // Obtener rango usado para saber la última fila
     const usedRange = await graphCall(
-      `/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/worksheets/${wsId}/usedRange?$select=rowCount`
+      `/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/worksheets/${wsId}/usedRange?$select=rowCount`,
+      "GET", null, sessionHeader
     );
     const nextRow = usedRange.rowCount + 1;
 
@@ -506,13 +525,20 @@ async function logSessionToExcel(sessionData) {
     await graphCall(
       `/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/worksheets/${wsId}/range(address='${rangeAddr}')`,
       "PATCH",
-      { values: row }
+      { values: row },
+      sessionHeader
     );
 
     updateSyncBadge('online');
     return { ok: true };
   } catch(e) {
     console.error("Sync error:", e);
+    // Timeout de arranque en frío del workbook — la sesión suele quedar inválida, se descarta y se reintenta una vez
+    if (!isRetry) {
+      workbookSessionId = null;
+      await new Promise(r => setTimeout(r, 1500));
+      return logSessionToExcel(sessionData, true);
+    }
     updateSyncBadge('offline');
     return { ok: false, error: e.message };
   }
