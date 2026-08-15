@@ -9,9 +9,7 @@
 <link rel="manifest" href="manifest.json">
 
 <!-- MSAL.js — Microsoft Authentication Library -->
-<script src="https://unpkg.com/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"
-        integrity="sha384-OJTwghM0Gh3Zc+gmd6l0lz1pFw9KuHHq0mSEZgmQEKgMnuSWWDb3bU9KzuD7w2hU"
-        crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@azure/msal-browser@2.38.3/dist/msal-browser.min.js"></script>
 
 <style>
 :root {
@@ -523,7 +521,7 @@ async function logSessionToExcel(sessionData) {
 // ══════════════════════════════════════════════════════
 const BANK = {
   Ethics: [
-    { id:"Q150", topic:"I(C) vs III(D)", tema:"Ethics & Professional Standards", subtema:"Balance Sheet / DTA-DTL",
+    { id:"Q150", topic:"I(C) vs III(D)", tema:"Ethics & Professional Standards", subtema:"Standard I",
       text:"Un analista incluye retornos históricos inflados de su cartera anterior en el pitch deck de la firma. ¿Qué Standards viola?",
       opts:["Solo I(B) — Independence and Objectivity","Solo I(C) — Misrepresentation","Solo III(D) — Performance Presentation","Tanto I(C) como III(D) — violación dual"],
       correct:3, anchor:"Trampa clásica: cuando el dato de performance es falso caen ambos. I(C) por la mentira; III(D) porque el performance no es fair, accurate y complete. El examen los usa como distractores entre sí." },
@@ -555,8 +553,8 @@ const BANK = {
   FSA: [
     { id:"FSA-01", topic:"DTA — Origen", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
       text:"¿En cuál de estas situaciones surge un Deferred Tax Asset (DTA)?",
-      opts:["Cuando el ingreso gravable es mayor que el ingreso contable en el período actual","Cuando se usa depreciación acelerada para efectos fiscales","Cuando el tax expense contable > taxes payable (diferencia temporaria deducible)","Cuando la tasa fiscal efectiva supera la tasa statutory"],
-      correct:2, anchor:"DTA = pagás MÁS impuesto hoy del que el IS reconoce como gasto. Eso crea el derecho a reducir impuestos futuros. Pagas ahora → recuperás después." },
+      opts:["Cuando el ingreso gravable es mayor que el ingreso contable en el período actual","Cuando se usa depreciación acelerada para efectos fiscales","Cuando el tax expense contable > taxes payable (diferencia temporaria imponible → DTL)","Cuando la tasa fiscal efectiva supera la tasa statutory"],
+      correct:0, anchor:"Ingreso gravable > ingreso contable → taxes payable > tax expense → pagás MÁS impuesto en cash de lo que el IS reconoce → DTA (recuperás después). Trampa: opción B (depreciación acelerada) crea DTL. Opción C describe un DTL. [CFA 2027 V4: 'a deferred tax asset arises because of an excess amount paid for taxes (when taxable income is greater than accounting profit)']" },
     { id:"FSA-02", topic:"DTL — Depreciación acelerada", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
       text:"Una empresa usa depreciación acelerada fiscal y lineal en contabilidad. Al inicio del activo, ¿qué aparece en el balance?",
       opts:["DTA — porque el ingreso contable es menor que el gravable","DTL — porque el ingreso contable es mayor que el gravable","Nada — es una diferencia permanente","Depende de si el activo es fijo o intangible"],
