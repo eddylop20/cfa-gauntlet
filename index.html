@@ -402,14 +402,24 @@ function initMsal() {
   } catch(e) { console.warn("MSAL init error:", e); }
 }
 
+function isMobile() {
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 async function loginMicrosoft() {
   if (!msalInstance) {
     alert("Completá el setup de Azure primero. Seguí las instrucciones en AZURE_SETUP.md");
     return;
   }
   try {
-    const response = await msalInstance.loginPopup(loginRequest);
-    setToken(response.accessToken);
+    if (isMobile()) {
+      // Los popups son poco confiables en navegadores móviles (y en modo app instalada) — usamos redirect,
+      // que navega a Microsoft y vuelve a esta misma pestaña; handleRedirectPromise() en initMsal() toma el token al volver.
+      await msalInstance.loginRedirect(loginRequest);
+    } else {
+      const response = await msalInstance.loginPopup(loginRequest);
+      setToken(response.accessToken);
+    }
   } catch(e) {
     if (e.errorCode !== "user_cancelled") console.error(e);
   }
