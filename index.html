@@ -262,6 +262,13 @@ body::before {
   transition: all 0.2s; box-shadow: 0 4px 22px rgba(124,58,237,0.28);
 }
 .play-again-btn:hover { transform: translateY(-2px); }
+.retry-btn {
+  width: 100%; padding: 15px; margin-bottom: 10px;
+  background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.4);
+  border-radius: 13px; color: var(--warning);
+  font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.2s;
+}
+.retry-btn:hover { background: rgba(245,158,11,0.2); }
 
 /* ── POPUPS ── */
 .xp-popup {
@@ -402,6 +409,7 @@ body::before {
     <div id="missed-list"></div>
   </div>
 
+  <button class="retry-btn" id="retry-errors-btn" style="display:none;" onclick="retryErrors()">🔁 Reintentar errores</button>
   <button class="play-again-btn" onclick="goToStart()">↩ Jugar de nuevo</button>
 </div>
 
@@ -970,8 +978,8 @@ const QUESTIONS_PER_ROUND = 5;
 let state = {
   block: null, blockTema: null, questions: [], current: 0,
   lives: 3, streak: 0, bestStreak: 0, xp: 0,
-  dots: [], missed: [], responses: [], answered: false,
-  startTime: null
+  dots: [], missed: [], missedQuestions: [], responses: [], answered: false,
+  isRetry: false, startTime: null
 };
 
 // ── HELPERS ──
@@ -1043,6 +1051,76 @@ function markSeen(block, ids) {
   const seen = new Set([...getSeenIds(block), ...ids]);
   localStorage.setItem('gauntlet_seen_' + block, JSON.stringify([...seen]));
 }
+// Peso adaptativo: preguntas de un LOS donde tu accuracy histórica está por debajo
+// de tu objetivo (75%, el mismo umbral que usa tu Dashboard) salen con más frecuencia.
+// Sin historial para ese LOS (o pregunta sin LOS real) → peso neutro, se comporta como antes.
+let losAccuracyCache = null;
+
+function parseCsvLine(line) {
+  const out = [];
+  let cur = '', inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"') { if (line[i+1] === '"') { cur += '"'; i++; } else inQuotes = false; }
+      else cur += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { out.push(cur); cur = ''; }
+      else cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+async function loadLosAccuracy() {
+  const resp = await fetch(`${GRAPH}/me/drive/root:/${RESPONSES_LOG_PATH}:/content`, {
+    headers: { "Authorization": "Bearer " + accessToken }
+  });
+  if (!resp.ok) return {};
+  const lines = (await resp.text()).split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return {};
+  const header = parseCsvLine(lines[0]);
+  const losIdx = header.indexOf('los_code');
+  const okIdx = header.indexOf('correcto');
+  if (losIdx < 0 || okIdx < 0) return {};
+  const acc = {};
+  for (let i = 1; i < lines.length; i++) {
+    const f = parseCsvLine(lines[i]);
+    const los = f[losIdx];
+    if (!los) continue;
+    if (!acc[los]) acc[los] = { correct: 0, total: 0 };
+    acc[los].total++;
+    if (f[okIdx] === 'True') acc[los].correct++;
+  }
+  return acc;
+}
+
+function questionWeight(q) {
+  const los = q.topic;
+  if (!los || !losAccuracyCache || !losAccuracyCache[los]) return 1;
+  const { correct, total } = losAccuracyCache[los];
+  if (total < 2) return 1; // muy poca data para confiar en el promedio
+  const gap = 0.75 - (correct / total);
+  return gap > 0 ? 1 + gap * 4 : 1;
+}
+
+function weightedSample(pool, n) {
+  const items = pool.map(q => ({ q, w: Math.max(0.0001, questionWeight(q)) }));
+  const picked = [];
+  for (let i = 0; i < n && items.length; i++) {
+    const total = items.reduce((s, it) => s + it.w, 0);
+    let r = Math.random() * total, idx = 0;
+    for (; idx < items.length - 1; idx++) {
+      r -= items[idx].w;
+      if (r <= 0) break;
+    }
+    picked.push(items.splice(idx, 1)[0].q);
+  }
+  return picked;
+}
+
 function pickRoundQuestions(block) {
   const pool = BANK[block] || [];
   const seen = new Set(getSeenIds(block));
@@ -1051,7 +1129,7 @@ function pickRoundQuestions(block) {
     localStorage.removeItem('gauntlet_seen_' + block);
     unseen = pool;
   }
-  const round = shuffle(unseen).slice(0, QUESTIONS_PER_ROUND);
+  const round = weightedSample(unseen, QUESTIONS_PER_ROUND);
   markSeen(block, round.map(q => q.id));
   return round;
 }
@@ -1090,9 +1168,15 @@ async function startGame() {
     sb.textContent = prevText;
   }
 
+  if (accessToken && !losAccuracyCache) {
+    try { losAccuracyCache = await loadLosAccuracy(); }
+    catch(e) { losAccuracyCache = {}; console.warn('No se pudo cargar historial LOS:', e); }
+  }
+
   state.questions = pickRoundQuestions(state.block);
   state.current = 0; state.lives = 3; state.streak = 0;
-  state.bestStreak = 0; state.xp = 0; state.missed = []; state.responses = [];
+  state.bestStreak = 0; state.xp = 0; state.missed = []; state.missedQuestions = [];
+  state.responses = []; state.isRetry = false;
   state.dots = state.questions.map(() => 'pending');
   state.startTime = Date.now();
   document.getElementById('block-label').textContent =
@@ -1105,6 +1189,21 @@ function exitGame() {
   if (confirm('¿Salir del bloque? Se pierde el progreso de esta ronda.')) {
     goToStart();
   }
+}
+
+// Reintenta solo las preguntas falladas de la última ronda, en orden inverso
+// (la más reciente primero) — capitaliza el error mientras está fresco.
+function retryErrors() {
+  if (!state.missedQuestions.length) return;
+  state.questions = state.missedQuestions;
+  state.current = 0; state.lives = 3; state.streak = 0;
+  state.bestStreak = 0; state.xp = 0; state.missed = []; state.missedQuestions = [];
+  state.responses = []; state.isRetry = true;
+  state.dots = state.questions.map(() => 'pending');
+  state.startTime = Date.now();
+  document.getElementById('block-label').textContent = '🔁 Retry — errores anteriores';
+  show('screen-game');
+  updateHUD(); loadQuestion();
 }
 
 function loadQuestion() {
@@ -1167,6 +1266,7 @@ function handleAnswer(idx, btn) {
     card.classList.add('flash-err');
     state.dots[state.current] = 'fail';
     state.missed.push({ id: q.id, topic: q.topic });
+    state.missedQuestions.unshift(q); // más reciente primero, para el retry
     anchor.className = 'anchor-box err show';
     document.getElementById('anchor-lbl').textContent = '✗ Incorrecto — Ancla mental:';
     document.getElementById('anchor-text').textContent = q.anchor;
@@ -1222,6 +1322,14 @@ async function showResults() {
     document.getElementById('missed-box').style.display = 'none';
   }
 
+  const retryBtn = document.getElementById('retry-errors-btn');
+  if (state.missedQuestions.length > 0) {
+    retryBtn.style.display = 'block';
+    retryBtn.textContent = `🔁 Reintentar ${state.missedQuestions.length} error${state.missedQuestions.length > 1 ? 'es' : ''}`;
+  } else {
+    retryBtn.style.display = 'none';
+  }
+
   show('screen-results');
 
   // Sync to Excel si hay token
@@ -1234,7 +1342,7 @@ async function showResults() {
     const result = await logSessionToExcel({
       block: state.block,
       tema: state.blockTema || "Financial Statement Analysis",
-      subtema: `Gauntlet — ${state.block}`,
+      subtema: state.isRetry ? `Retry — ${state.block}` : `Gauntlet — ${state.block}`,
       total, correct, minutes,
       responses: state.responses
     });
