@@ -277,20 +277,15 @@ body::before {
 
   <div class="section-lbl">Seleccioná el bloque</div>
   <div class="block-grid">
-    <button class="block-btn" data-block="Ethics" data-tema="Ethics & Professional Standards" onclick="selectBlock(this)">
-      <div class="b-name">Ethics</div>
-      <div class="b-meta">Standards I–VII · Code</div>
-      <div class="b-badge">7 preguntas</div>
-    </button>
     <button class="block-btn" data-block="FSA" data-tema="Financial Statement Analysis" onclick="selectBlock(this)">
       <div class="b-name">FSA — DTA/DTL</div>
-      <div class="b-meta">Deferred taxes · Balance</div>
-      <div class="b-badge">6 preguntas</div>
+      <div class="b-meta">Income Taxes · Module 35</div>
+      <div class="b-badge">~45 preguntas</div>
     </button>
     <button class="block-btn" data-block="Mix" data-tema="Financial Statement Analysis" onclick="selectBlock(this)">
       <div class="b-name">Mix Total</div>
-      <div class="b-meta">Ethics + FSA mezclados</div>
-      <div class="b-badge">Difícil</div>
+      <div class="b-meta">Ethics + FSA · todo el QBank</div>
+      <div class="b-badge">~880 preguntas</div>
     </button>
     <button class="block-btn" data-block="Ethics2" data-tema="Ethics & Professional Standards" onclick="selectBlock(this)">
       <div class="b-name">Ethics — Trampas</div>
@@ -655,62 +650,6 @@ async function logSessionToExcel(sessionData, isRetry = false) {
 // QUESTION BANK
 // ══════════════════════════════════════════════════════
 const BANK = {
-  Ethics: [
-    { id:"Q150", topic:"I(C) vs III(D)", tema:"Ethics & Professional Standards", subtema:"Standard I",
-      text:"An analyst includes inflated historical returns from their previous portfolio in the firm's pitch deck. Which Standards does this violate?",
-      opts:["Only I(B) — Independence and Objectivity","Only I(C) — Misrepresentation","Only III(D) — Performance Presentation","Both I(C) and III(D) — dual violation"],
-      correct:3, anchor:"Classic trap: when the performance data is false, both apply. I(C) for the misrepresentation itself; III(D) because the performance isn't fair, accurate, and complete. The exam uses them as distractors against each other." },
-    { id:"Q8", topic:"MNPI — Tippee chain", tema:"Ethics & Professional Standards", subtema:"Standard II",
-      text:"An employee's brother overhears a conversation about not-yet-published results. If he trades on that information, does he violate Standard II(A)?",
-      opts:["No — he didn't receive the information directly from the insider","No — he isn't an employee of the firm and didn't sign an NDA","Yes — the tippee chain applies regardless of how the information was received","Only if he knew with certainty that it was confidential information"],
-      correct:2, anchor:"MNPI applies to the entire tippee chain. Regardless of the number of links or whether it was intentional — if it's material and non-public, the rule applies." },
-    { id:"Q62", topic:"Standard IV(B)", tema:"Ethics & Professional Standards", subtema:"Standard IV",
-      text:"A client offers a bonus for beating the benchmark. What does Standard IV(B) require?",
-      opts:["Reject the compensation immediately","Accept only if the bonus is paid in cash","Disclose the arrangement to the employer and obtain written consent","Reject it unless the employer approves before the offer is made"],
-      correct:2, anchor:"IV(B) does NOT require rejecting it. It only requires disclosure and consent. It's a transparency rule, not a prohibition rule." },
-    { id:"Q29", topic:"Access person", tema:"Ethics & Professional Standards", subtema:"Standard IV",
-      text:"What defines an 'access person' under Standard IV?",
-      opts:["Any employee with physical access to the trading system","Only C-level directors and managers","The functional role they perform, regardless of formal hierarchy","Anyone with access to client data"],
-      correct:2, anchor:"Access person = role, not hierarchy. A research supervisor is an access person even without being a manager. The exam uses the role/hierarchy confusion as a direct distractor." },
-    { id:"Q135", topic:"VII(A) vs VII(B)", tema:"Ethics & Professional Standards", subtema:"Standard VII",
-      text:"A CFA candidate cheats during the exam. Which Standard does this violate?",
-      opts:["VII(A) — Conduct as Members and Candidates in the CFA Program","VII(B) — Reference to CFA Institute, Designation, and Program","I(D) — Misconduct","I(A) — Knowledge of the Law"],
-      correct:0, anchor:"VII(B) governs how the designation is used. Conduct DURING the exam is VII(A). They're neighboring Standards that the exam deliberately exploits as distractors." },
-    { id:"Q177", topic:"Code of Ethics — ICDR", tema:"Ethics & Professional Standards", subtema:"Code of Ethics",
-      text:"What is the correct acronym for the values in the CFA Code of Ethics?",
-      opts:["HIRE — Honesty, Integrity, Respect, Ethics","ICDR — Integrity, Competence, Diligence, Respect","CARE — Competence, Accountability, Respect, Ethics","EPIC — Ethics, Professionalism, Integrity, Competence"],
-      correct:1, anchor:"ICDR: Integrity, Competence, Diligence, Respect. 'Honesty' and 'Ethics' are distractors that don't appear in the acronym." },
-    { id:"Q115", topic:"I(D) — Misconduct", tema:"Ethics & Professional Standards", subtema:"Standard I",
-      text:"An analyst published false data. The next day, they issued a full public correction. Is this still a violation of I(D)?",
-      opts:["No — a timely correction erases the violation","No — it only applies if there was demonstrable economic harm","Yes — a later correction doesn't eliminate the original violation","It depends on whether the error was intentional or unintentional"],
-      correct:2, anchor:"The violation occurred when the false data was published. Correcting it afterward is the right thing to do, but it doesn't reverse the fact that the violation happened. 'Subsequent correction' is the classic distractor." }
-  ],
-  FSA: [
-    { id:"FSA-01", topic:"DTA — Origin", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
-      text:"In which of these situations does a Deferred Tax Asset (DTA) arise?",
-      opts:["When taxable income is greater than accounting income in the current period","When accelerated depreciation is used for tax purposes","When accounting tax expense > taxes payable (taxable temporary difference → DTL)","When the effective tax rate exceeds the statutory rate"],
-      correct:0, anchor:"Taxable income > accounting income → taxes payable > tax expense → you pay MORE tax in cash than the income statement recognizes → DTA (recovered later). Trap: option B (accelerated depreciation) creates a DTL. Option C describes a DTL. [CFA 2027 V4: 'a deferred tax asset arises because of an excess amount paid for taxes (when taxable income is greater than accounting profit)']" },
-    { id:"FSA-02", topic:"DTL — Accelerated Depreciation", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
-      text:"A company uses accelerated depreciation for tax purposes and straight-line for accounting. At the start of the asset's life, what appears on the balance sheet?",
-      opts:["DTA — because accounting income is lower than taxable income","DTL — because accounting income is higher than taxable income","Nothing — it's a permanent difference","It depends on whether the asset is fixed or intangible"],
-      correct:1, anchor:"Accelerated tax depreciation → more deduction now → less tax today → but more tax paid later. That future obligation = DTL." },
-    { id:"FSA-03", topic:"Permanent Difference", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
-      text:"Which of these is a PERMANENT difference?",
-      opts:["Accelerated vs. straight-line depreciation between tax and accounting books","Warranties recognized for accounting purposes but deductible only when paid","Legal fines that are not tax-deductible","Deferred revenue recognized before it's taxed"],
-      correct:2, anchor:"Fines will never be deductible — there's no future reversal. No reversal = permanent difference = no DTA/DTL. It only shifts the effective rate." },
-    { id:"FSA-04", topic:"Valuation Allowance", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
-      text:"A company has a $200K DTA but is unlikely to have enough future income to use it. What does it do under US GAAP?",
-      opts:["Eliminate the DTA from the balance sheet entirely","Create a Valuation Allowance that reduces the net DTA","Reclassify the DTA as a DTL","Leave it unchanged — it adjusts automatically"],
-      correct:1, anchor:"GAAP: the VA reduces the net DTA without eliminating it. IFRS: the DTA simply isn't recognized at all. VA increases → Tax Expense increases (not decreases)." },
-    { id:"FSA-05", topic:"Tax Rate Change", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
-      text:"The tax rate rises from 25% to 30%. The company has a DTL of $80. What happens?",
-      opts:["The DTL increases — immediately revalued at the new rate","The DTL decreases — a higher rate reduces the deferred liability","The DTL stays the same — locked in at the rate from the period it originated","The DTL is canceled and a new one is recorded"],
-      correct:0, anchor:"DTAs and DTLs are immediately revalued when the rate changes. The adjustment goes to Tax Expense in the current period — not to OCI or retained earnings." },
-    { id:"FSA-06", topic:"Effective vs Statutory Rate", tema:"Financial Statement Analysis", subtema:"Balance Sheet / DTA-DTL",
-      text:"The statutory rate is 30%. The company has tax-exempt dividend income. Its effective rate came out to 22%. Why?",
-      opts:["Deductible temporary difference — generates a DTA in the future","Taxable temporary difference — generates a DTL","Permanent difference — no DTA/DTL, it only shifts the effective rate","The effective rate always converges to the statutory rate in the long run"],
-      correct:2, anchor:"Tax-exempt income = permanent difference. It reduces actual tax owed without creating deferred assets/liabilities. Effective rate < Statutory rate — a permanent gap." }
-  ],
   Ethics2: [
     { id:"ET2-01", topic:"I(B) — Independence", tema:"Ethics & Professional Standards", subtema:"Standard I",
       text:"An analyst is pressured by their manager to change a recommendation to Buy on a stock that qualifies as a Sell. If they give in, what do they primarily violate?",
@@ -738,15 +677,6 @@ const BANK = {
       correct:2, anchor:"Undisclosed referral fees = VI(C) specifically. When a specific rule exists (VI(C)), it takes precedence over the general one (VI(A)). The exam exploits this." }
   ]
 };
-BANK.Mix = [
-  ...BANK.Ethics.slice(0,3),
-  ...BANK.FSA.slice(0,2),
-  BANK.Ethics2[0],
-  BANK.FSA[3],
-  BANK.Ethics[4],
-  BANK.FSA[4]
-];
-
 // ══════════════════════════════════════════════════════
 // QBANK 2027 — banco completo, leído en vivo desde OneDrive (privado)
 // Solo preguntas con module_los, así alimentan LOS Breakdown de verdad.
@@ -769,6 +699,24 @@ const QBANK_2027_SOURCES = {
       "Cuestionario/Preguntas/FSA/FSA_2027_R30-36.json",
       "Cuestionario/Preguntas/FSA/FSA_2027_R37-38.json"
     ]
+  }
+};
+
+// Bloques derivados — se construyen a partir de los pools de arriba una vez cargados,
+// no son un fetch aparte. FSA-DTA/DTL filtra por Module 35 (Income Taxes, confirmado
+// contra el JSON real); Mix combina ambos pools completos.
+const DERIVED_BLOCKS = {
+  FSA: {
+    tema: "Financial Statement Analysis",
+    label: "FSA — DTA/DTL",
+    requires: ["FSA2027"],
+    build: () => (BANK.FSA2027 || []).filter(q => (q.topic || "").startsWith("Module 35"))
+  },
+  Mix: {
+    tema: null,
+    label: "Mix Total",
+    requires: ["Ethics2027", "FSA2027"],
+    build: () => [...(BANK.Ethics2027 || []), ...(BANK.FSA2027 || [])]
   }
 };
 
@@ -907,7 +855,10 @@ function pickRoundQuestions(block) {
 async function startGame() {
   if (!state.block) return;
 
-  if (QBANK_2027_SOURCES[state.block] && !BANK[state.block]) {
+  const qbankSrc = QBANK_2027_SOURCES[state.block];
+  const derived = DERIVED_BLOCKS[state.block];
+
+  if ((qbankSrc || derived) && !BANK[state.block]) {
     if (!accessToken) {
       alert('Este bloque trae el QBank completo desde tu OneDrive — conectá tu cuenta primero (arriba a la derecha).');
       return;
@@ -917,7 +868,14 @@ async function startGame() {
     sb.disabled = true;
     sb.textContent = '⟳ Cargando preguntas...';
     try {
-      BANK[state.block] = await loadQBankTopic(state.block);
+      if (qbankSrc) {
+        BANK[state.block] = await loadQBankTopic(state.block);
+      } else {
+        for (const dep of derived.requires) {
+          if (!BANK[dep]) BANK[dep] = await loadQBankTopic(dep);
+        }
+        BANK[state.block] = derived.build();
+      }
     } catch(e) {
       alert('No se pudo cargar el banco de preguntas: ' + e.message);
       sb.disabled = false;
@@ -934,7 +892,7 @@ async function startGame() {
   state.dots = state.questions.map(() => 'pending');
   state.startTime = Date.now();
   document.getElementById('block-label').textContent =
-    QBANK_2027_SOURCES[state.block]?.label || (state.block === 'Ethics2' ? 'Ethics — Trampas' : state.block);
+    qbankSrc?.label || derived?.label || (state.block === 'Ethics2' ? 'Ethics — Trampas' : state.block);
   show('screen-game');
   updateHUD(); loadQuestion();
 }
@@ -980,8 +938,8 @@ function handleAnswer(idx, btn) {
   if (!isOk) btn.classList.add('wrong');
 
   state.responses.push({
-    id: q.id, questionId: q.questionId || q.id, losCode: q.losCode || (QBANK_2027_SOURCES[state.block] ? q.topic : null),
-    tema: state.blockTema, subtema: q.subtema || q.topic, block: state.block,
+    id: q.id, questionId: q.questionId || q.id, losCode: q.questionId ? q.topic : null,
+    tema: q.tema || state.blockTema, subtema: q.subtema || q.topic, block: state.block,
     correct: isOk, chosenText: q.opts[idx], correctText: q.opts[q.correct],
     questionText: q.text, anchor: q.anchor, fecha: new Date().toISOString().split('T')[0]
   });
