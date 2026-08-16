@@ -523,6 +523,16 @@ function updateSyncBadge(state) {
   badge.textContent = { offline: '⚡ Offline', online: '✓ Sincronizado', syncing: '⟳ Guardando...' }[state];
 }
 
+// Fecha local YYYY-MM-DD — toISOString() da la fecha en UTC, que en Lima (UTC-5) adelanta
+// un día a partir de ~19:00 hora local. Todo lo que se guarda en el tracker usa esta función.
+function localDateStr() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // ══════════════════════════════════════════════════════
 // MICROSOFT GRAPH API
 // ══════════════════════════════════════════════════════
@@ -584,7 +594,7 @@ async function appendErroresRows(errores, sessionHeader) {
   const wsId = await getWorksheetId("❌ Errores", sessionHeader);
   if (!wsId) throw new Error("Worksheet '❌ Errores' no encontrado");
   const nextRow = await getNextDataRow(wsId, sessionHeader);
-  const today = new Date().toISOString().split("T")[0];
+  const today = localDateStr();
 
   const rows = errores.map(e => [
     today,
@@ -656,7 +666,7 @@ async function logSessionToExcel(sessionData, isRetry = false) {
     const nextRow = await getNextDataRow(wsId, sessionHeader);
 
     // Preparar fila de datos
-    const today = new Date().toISOString().split("T")[0];
+    const today = localDateStr();
     const pct = sessionData.correct / sessionData.total;
     const confianza = sessionData.avgConfianza || null;
     const gap = confianza ? Math.round((confianza/5 - pct) * 1000) / 1000 : null;
@@ -895,7 +905,7 @@ async function finishFlashDaily() {
   const total = flashState.results.length;
   const correct = flashState.results.filter(r => r.knew).length;
   const missed = flashState.results.filter(r => !r.knew);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateStr();
 
   const responses = flashState.results.map(r => ({
     id: r.card.id, questionId: r.card.id, losCode: r.card.los || null,
@@ -1135,7 +1145,7 @@ function handleAnswer(idx, btn) {
     id: q.id, questionId: q.questionId || q.id, losCode: q.questionId ? q.topic : null,
     tema: q.tema || state.blockTema, subtema: q.subtema || q.topic, block: state.block,
     correct: isOk, chosenText: q.opts[idx], correctText: q.opts[q.correct],
-    questionText: q.text, anchor: q.anchor, fecha: new Date().toISOString().split('T')[0]
+    questionText: q.text, anchor: q.anchor, fecha: localDateStr()
   });
 
   if (isOk) {
