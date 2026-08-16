@@ -98,6 +98,37 @@ body::before {
 .start-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 26px rgba(124,58,237,0.42); }
 .start-btn:disabled { opacity: 0.38; cursor: default; transform: none; }
 
+/* Reto del Día */
+.flash-cta {
+  width: 100%; padding: 14px 18px; border-radius: 15px; cursor: pointer;
+  background: linear-gradient(135deg, rgba(245,158,11,0.14), rgba(124,58,237,0.1));
+  border: 1px solid rgba(245,158,11,0.35);
+  display: flex; align-items: center; gap: 14px; text-align: left;
+  transition: all 0.2s;
+}
+.flash-cta:hover { border-color: rgba(245,158,11,0.6); transform: translateY(-1px); }
+.flash-cta-icon { font-size: 1.6rem; flex-shrink: 0; }
+.flash-cta-text { flex: 1; font-size: 0.82rem; color: var(--muted); line-height: 1.4; }
+.flash-cta-text strong { color: var(--warning); display: block; font-size: 0.95rem; margin-bottom: 2px; }
+.flash-cta-arrow { color: var(--warning); font-size: 1.2rem; flex-shrink: 0; }
+.flash-badge {
+  display: inline-block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px;
+  padding: 3px 9px; border-radius: 20px; text-transform: uppercase;
+}
+.flash-badge.error { background: rgba(239,68,68,0.14); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+.flash-badge.theory { background: rgba(6,182,212,0.14); color: var(--accent2); border: 1px solid rgba(6,182,212,0.3); }
+.flash-los { font-size: 0.75rem; color: var(--muted); margin-top: 6px; }
+.flash-face { font-size: 1.05rem; line-height: 1.5; margin: 18px 0; white-space: pre-line; }
+.flash-rate-row { display: flex; gap: 10px; margin-top: 6px; }
+.flash-rate-btn {
+  flex: 1; padding: 13px; border-radius: 12px; font-weight: 700; font-size: 0.9rem;
+  cursor: pointer; border: 1px solid; transition: all 0.2s;
+}
+.flash-rate-btn.knew { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.35); color: #6ee7b7; }
+.flash-rate-btn.knew:hover { background: rgba(16,185,129,0.2); }
+.flash-rate-btn.missed { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.35); color: #fca5a5; }
+.flash-rate-btn.missed:hover { background: rgba(239,68,68,0.2); }
+
 /* Auth CTA */
 .auth-cta {
   width: 100%; padding: 13px 16px; border-radius: 13px;
@@ -275,6 +306,15 @@ body::before {
     <button class="auth-btn" onclick="loginMicrosoft()">Conectar</button>
   </div>
 
+  <button class="flash-cta" id="flash-cta" onclick="startFlashDaily()">
+    <div class="flash-cta-icon">🔥</div>
+    <div class="flash-cta-text">
+      <strong>Reto del Día</strong>
+      <span id="flash-cta-sub">3 cards de repaso — mismas que tu email de warmup</span>
+    </div>
+    <div class="flash-cta-arrow">→</div>
+  </button>
+
   <div class="section-lbl">Seleccioná el bloque</div>
   <div class="block-grid">
     <button class="block-btn" data-block="FSA" data-tema="Financial Statement Analysis" onclick="selectBlock(this)">
@@ -363,6 +403,32 @@ body::before {
   </div>
 
   <button class="play-again-btn" onclick="goToStart()">↩ Jugar de nuevo</button>
+</div>
+
+<!-- ══ RETO DEL DÍA (FLASHCARDS) ══ -->
+<div id="screen-flash" class="screen">
+  <div class="block-hdr" style="width:100%;max-width:640px;">
+    <button onclick="exitGame()" title="Salir" style="background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;padding:0 8px 0 0;line-height:1;">←</button>
+    <div class="bh-name">🔥 RETO DEL DÍA</div>
+    <div id="flash-num" style="font-size:0.76rem;color:var(--muted);">1 / 3</div>
+  </div>
+
+  <div class="q-card" id="flash-card" style="width:100%;max-width:640px;">
+    <div class="q-meta">
+      <span id="flash-type-badge" class="flash-badge theory">Teoría</span>
+      <span class="q-id-tag" id="flash-id-tag">—</span>
+    </div>
+    <div class="flash-los" id="flash-los"></div>
+    <div class="flash-face" id="flash-front"></div>
+    <div class="flash-face" id="flash-back" style="display:none; color: var(--accent2); border-top: 1px solid var(--border); padding-top: 16px;"></div>
+  </div>
+
+  <button class="next-btn show" id="flash-reveal-btn" onclick="revealFlash()">Ver respuesta →</button>
+
+  <div class="flash-rate-row" id="flash-rate-row" style="display:none; width:100%; max-width:640px;">
+    <button class="flash-rate-btn missed" onclick="rateFlash(false)">✗ Me costó</button>
+    <button class="flash-rate-btn knew" onclick="rateFlash(true)">✓ Lo sabía</button>
+  </div>
 </div>
 
 <script>
@@ -757,6 +823,134 @@ async function loadQBankTopic(blockKey) {
   }
   localStorage.setItem(cacheKey, JSON.stringify(questions));
   return questions;
+}
+
+// ══════════════════════════════════════════════════════
+// RETO DEL DÍA — lee scripts/flash_daily.json (mismas 3 cards del email de warmup)
+// ══════════════════════════════════════════════════════
+const FLASH_DAILY_PATH = "scripts/flash_daily.json";
+const FLASH_TOPIC_TO_TEMA = {
+  FSA: "Financial Statement Analysis",
+  ETICA: "Ethics & Professional Standards",
+  QM: "Quantitative Methods",
+  EQUITY: "Equity Investments"
+};
+let flashState = { cards: [], current: 0, results: [], qbankTopic: null };
+
+async function startFlashDaily() {
+  if (!accessToken) {
+    alert('El Reto del Día se lee de tu OneDrive — conectá tu cuenta primero (arriba a la derecha).');
+    return;
+  }
+  const subEl = document.getElementById('flash-cta-sub');
+  const prevSub = subEl.textContent;
+  subEl.textContent = '⟳ Cargando...';
+  try {
+    const data = await graphGetJsonFile(FLASH_DAILY_PATH);
+    if (!data.cards || !data.cards.length) throw new Error('No hay cards para hoy todavía');
+    flashState = { cards: data.cards, current: 0, results: [], qbankTopic: data.qbank_topic };
+  } catch(e) {
+    alert('No se pudo cargar el Reto del Día: ' + e.message);
+    subEl.textContent = prevSub;
+    return;
+  }
+  subEl.textContent = prevSub;
+  show('screen-flash');
+  loadFlashCard();
+}
+
+function loadFlashCard() {
+  const c = flashState.cards[flashState.current];
+  document.getElementById('flash-num').textContent = `${flashState.current + 1} / ${flashState.cards.length}`;
+  document.getElementById('flash-id-tag').textContent = c.id;
+  document.getElementById('flash-los').textContent = c.los || '';
+  document.getElementById('flash-front').textContent = c.front;
+  document.getElementById('flash-back').textContent = c.back;
+  document.getElementById('flash-back').style.display = 'none';
+  const badge = document.getElementById('flash-type-badge');
+  badge.className = 'flash-badge ' + (c.type === 'error' ? 'error' : 'theory');
+  badge.textContent = c.type === 'error' ? '🔁 Repaso de error' : '📘 Teoría';
+  document.getElementById('flash-reveal-btn').style.display = 'block';
+  document.getElementById('flash-rate-row').style.display = 'none';
+}
+
+function revealFlash() {
+  document.getElementById('flash-back').style.display = 'block';
+  document.getElementById('flash-reveal-btn').style.display = 'none';
+  document.getElementById('flash-rate-row').style.display = 'flex';
+}
+
+async function rateFlash(knew) {
+  flashState.results.push({ card: flashState.cards[flashState.current], knew });
+  if (flashState.current + 1 < flashState.cards.length) {
+    flashState.current++;
+    loadFlashCard();
+  } else {
+    await finishFlashDaily();
+  }
+}
+
+async function finishFlashDaily() {
+  const tema = FLASH_TOPIC_TO_TEMA[flashState.qbankTopic] || "Financial Statement Analysis";
+  const total = flashState.results.length;
+  const correct = flashState.results.filter(r => r.knew).length;
+  const missed = flashState.results.filter(r => !r.knew);
+  const today = new Date().toISOString().split('T')[0];
+
+  const responses = flashState.results.map(r => ({
+    id: r.card.id, questionId: r.card.id, losCode: r.card.los || null,
+    tema, subtema: r.card.los || "", block: "FlashDaily",
+    correct: r.knew, chosenText: r.knew ? r.card.back : "No lo recordó (autoevaluación)",
+    correctText: r.card.back, questionText: r.card.front, anchor: r.card.back, fecha: today
+  }));
+
+  const pct = total ? Math.round((correct/total)*100) : 0;
+  let emoji, title;
+  if (correct === total) { emoji='🏆'; title='¡Reto perfecto!'; }
+  else if (pct >= 66) { emoji='🎯'; title='Buen repaso'; }
+  else { emoji='📚'; title='A reforzar'; }
+
+  document.getElementById('res-emoji').textContent = emoji;
+  document.getElementById('res-title').textContent = title;
+  document.getElementById('res-score').textContent = `${correct}/${total}`;
+  document.getElementById('res-sub').textContent = 'del Reto del Día';
+  document.getElementById('stat-xp').textContent = correct * 10;
+  document.getElementById('stat-streak').textContent = '—';
+  document.getElementById('stat-lives').textContent = '🔥';
+
+  if (missed.length > 0) {
+    document.getElementById('missed-box').style.display = 'block';
+    document.getElementById('missed-list').innerHTML = missed.map(r =>
+      `<div class="missed-item"><div class="m-dot"></div><div><div style="margin-bottom:2px">${r.card.los || ''}</div><div class="m-topic">${r.card.id}</div></div></div>`
+    ).join('');
+  } else {
+    document.getElementById('missed-box').style.display = 'none';
+  }
+
+  show('screen-results');
+
+  const syncEl = document.getElementById('sync-result');
+  syncEl.style.display = 'flex';
+  if (accessToken) {
+    syncEl.className = 'sync-result pending';
+    syncEl.innerHTML = '⟳ Guardando reto en el Excel...';
+    const result = await logSessionToExcel({
+      block: "Reto del Día", tema, subtema: "Reto del Día",
+      total, correct, minutes: 1, responses
+    });
+    if (result.ok) {
+      syncEl.className = 'sync-result ok';
+      syncEl.innerHTML = result.errorCount
+        ? `✓ Reto guardado — ${result.errorCount} para reforzar en tu próxima Autopsia.`
+        : '✓ Reto del Día guardado — ¡dominaste las 3!';
+    } else {
+      syncEl.className = 'sync-result err';
+      syncEl.innerHTML = `⚠️ No se pudo sincronizar: ${result.error}`;
+    }
+  } else {
+    syncEl.className = 'sync-result pending';
+    syncEl.innerHTML = '⚡ Sin cuenta conectada — no se guardó';
+  }
 }
 
 // ══════════════════════════════════════════════════════
