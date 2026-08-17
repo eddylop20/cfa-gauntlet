@@ -619,51 +619,41 @@ function localDateStr() {
 // ══════════════════════════════════════════════════════
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
-// responses_log.csv vive suelto en la carpeta (no es parte del workbook) — se lee y reescribe entero.
-function csvField(v) {
-  const s = String(v ?? "");
-  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-}
+// responses_log.csv vive suelto en la carpeta (no es parte del workbook). Se sigue
+// LEYENDO directo (loadLosAccuracy, mas abajo) porque leer no tiene riesgo de carrera.
+// Escribir es otra historia: hasta hoy el Gauntlet escribia con GET+PUT del archivo
+// entero via Graph, en paralelo a que scripts/log_session.py (usado por Cowork en
+// sesiones de estudio en vivo, log_error(los_code=...)) lo escribe local via Python.
+// Dos escritores independientes al mismo archivo plano, con el sync de OneDrive de
+// por medio -- exactamente la misma familia de riesgo que hizo abandonar la API de
+// Workbook (ver mas abajo), solo que silenciosa: si colisionan, no hay error, se
+// pierden filas sin avisar. Confirmado con datos reales que el path de Cowork esta
+// activo (37 filas `cowork_...` en el CSV real). Por eso ahora el Gauntlet tambien
+// apendea a un inbox JSON como sessions/errors, y recalc.py lo drena reusando
+// responses_log.append_responses() -- el unico escritor de responses_log.csv pasa a
+// ser recalc.py, nunca el navegador. Costo aceptado: el peso adaptativo dentro del
+// Gauntlet pierde frescura intra-dia (una ronda de la tarde no ve la de la manana
+// hasta el proximo recalc.py) a cambio de no perder datos en silencio.
 const RESPONSES_LOG_PATH = "CFA/responses_log.csv";
-const RESPONSES_LOG_FIELDS = ["fecha","question_id","source","topic","los_code","correcto","confianza","sesion_id","trampa"];
 
 async function appendResponsesLog(rows, sesionId) {
   if (!rows.length) return;
-  let existing = "";
-  const getResp = await fetch(`${GRAPH}/me/drive/root:/${RESPONSES_LOG_PATH}:/content`, {
-    headers: { "Authorization": "Bearer " + accessToken }
-  });
-  if (getResp.ok) existing = await getResp.text();
-  else if (getResp.status !== 404) throw new Error(`No se pudo leer responses_log.csv (HTTP ${getResp.status})`);
-
-  let out = existing;
-  if (!out) out = RESPONSES_LOG_FIELDS.join(",") + "\r\n";
-  else if (!/\r?\n$/.test(out)) out += "\r\n";
-
-  rows.forEach(r => {
-    const record = {
-      fecha: r.fecha, question_id: r.questionId, source: "live", topic: r.tema,
-      los_code: r.losCode || "", correcto: r.correct ? "True" : "False",
-      confianza: "", sesion_id: sesionId, trampa: "False"
-    };
-    out += RESPONSES_LOG_FIELDS.map(f => csvField(record[f])).join(",") + "\r\n";
-  });
-
-  const putResp = await fetch(`${GRAPH}/me/drive/root:/${RESPONSES_LOG_PATH}:/content`, {
-    method: "PUT",
-    headers: { "Authorization": "Bearer " + accessToken, "Content-Type": "text/csv" },
-    body: out
-  });
-  if (!putResp.ok) throw new Error(`No se pudo guardar responses_log.csv (HTTP ${putResp.status})`);
+  const records = rows.map(r => ({
+    fecha: r.fecha, question_id: r.questionId, source: "live", topic: r.tema,
+    los_code: r.losCode || "", correcto: r.correct ? "True" : "False",
+    confianza: "", sesion_id: sesionId, trampa: "False"
+  }));
+  await appendJsonInbox("scripts/gauntlet_inbox_responses.json", records);
 }
 
-// Bandeja de entrada — el Gauntlet NO toca el workbook de Excel directamente (la API de
-// Workbook resultó frágil para escrituras en vivo: sesiones que vencen, usedRange con
-// formato fantasma, y sobre todo la copia local de OneDrive puede atrasarse respecto al
-// servidor sin avisar, con riesgo real de pisar datos si algo edita el archivo mientras
-// tanto). En su lugar, apendea a estos dos JSON planos — mismo mecanismo simple y robusto
-// que ya usa responses_log.csv. Tu recalc.py los "drena" hacia el Excel en el momento
-// controlado (corrida nocturna o manual), reusando tu propio log_session.py.
+// Bandeja de entrada — el Gauntlet NO toca el workbook de Excel ni responses_log.csv
+// directamente (la API de Workbook resultó frágil para escrituras en vivo: sesiones que
+// vencen, usedRange con formato fantasma, y sobre todo la copia local de OneDrive puede
+// atrasarse respecto al servidor sin avisar, con riesgo real de pisar datos si algo edita
+// el archivo mientras tanto — lo mismo aplicaba a responses_log.csv en paralelo a
+// log_session.py, ver appendResponsesLog). En su lugar, apendea a estos JSON planos — tu
+// recalc.py los "drena" hacia el Excel/CSV en el momento controlado (corrida nocturna o
+// manual), reusando tu propio log_session.py / responses_log.py.
 async function appendJsonInbox(path, newItems) {
   if (!newItems.length) return;
   let arr = [];
