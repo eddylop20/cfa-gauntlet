@@ -327,7 +327,7 @@ body::before {
   border: 1px solid var(--border); border-radius: 16px; padding: 22px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.4);
 }
-.confirm-msg { font-size: 0.95rem; line-height: 1.5; margin-bottom: 18px; text-align: center; }
+.confirm-msg { font-size: 0.95rem; line-height: 1.5; margin-bottom: 18px; text-align: center; white-space: pre-line; }
 .confirm-row { display: flex; gap: 10px; }
 .confirm-btn { flex: 1; padding: 12px; border-radius: 10px; font-weight: 700; font-size: 0.88rem; cursor: pointer; border: 1px solid; transition: all 0.2s; }
 .confirm-btn.cancel { background: transparent; border-color: rgba(255,255,255,0.15); color: var(--muted); }
@@ -950,32 +950,59 @@ function renderTopicBlocks() {
   }
 }
 
-// Banner "Hoy te toca reforzar" — el primer item de los_atrasados ya viene
-// priorizado (recuperables antes que backlog viejo, ver email_study.get_los_atrasados),
-// asi que la sugerencia coincide con la del email de warmup.
+// Banner "LOS atrasados" — items[] ya viene priorizado (recuperables antes
+// que backlog viejo, ver email_study.get_los_atrasados), pero mostrar solo
+// el #1 no es honesto si hay mas atraso acumulado atras (ej. el email puede
+// tener 4 LOS con 130+ dias que el banner no mencionaba). El titulo ahora
+// cuenta TODO el atraso real (recuperable + backlog); el click abre el
+// detalle completo en vez de saltar directo a jugar — la version que filtra
+// el pool hacia el LOS mas urgente es la proxima feature ("sesion enfocada"),
+// esto es solo visibilidad honesta por ahora.
+function losLabel(it) {
+  return (it.descripcion && it.descripcion !== "—") ? it.descripcion : it.los_code;
+}
+
 function renderAtrasoBanner() {
   const banner = document.getElementById('atraso-banner');
   const items = gauntletProgress?.los_atrasados || [];
-  if (!items.length) { banner.style.display = 'none'; return; }
+  const backlogExtra = gauntletProgress?.los_atrasados_backlog_extra || 0;
+  const total = items.length + backlogExtra;
+  if (!total) { banner.style.display = 'none'; return; }
+
   const top = items[0];
-  const topicInfo = gauntletProgress.topics.find(t => t.topic === top.tema);
-  const temaLabel = topicInfo ? topicInfo.tema : top.tema;
-  document.getElementById('atraso-sub').textContent =
-    `${temaLabel} · ${top.descripcion || top.los_code} — atrasado ${top.dias_atraso} día${top.dias_atraso === 1 ? '' : 's'}`;
-  banner.dataset.blockKey = topicInfo && topicInfo.unlocked ? safeBlockKey(top.tema) : '';
+  document.getElementById('atraso-title').textContent =
+    `${total} LOS atrasado${total === 1 ? '' : 's'}`;
+  if (top) {
+    const topicInfo = gauntletProgress.topics.find(t => t.topic === top.tema);
+    const temaLabel = topicInfo ? topicInfo.tema : top.tema;
+    const extra = total > 1 ? ` · +${total - 1} más` : '';
+    document.getElementById('atraso-sub').textContent =
+      `Más urgente: ${temaLabel} — ${losLabel(top)} (${top.dias_atraso}d)${extra}`;
+  } else {
+    document.getElementById('atraso-sub').textContent = `Todos de backlog (${LOS_ATRASO_BANDA_DIARIA_BANNER}+ días) — mejor una sesión dedicada que un drill diario.`;
+  }
   banner.style.display = 'flex';
 }
 
+const LOS_ATRASO_BANDA_DIARIA_BANNER = 30; // espejo de LOS_ATRASO_BANDA_DIARIA en email_study.py, solo para el texto del banner
+
 function jumpToAtraso() {
-  const banner = document.getElementById('atraso-banner');
-  const key = banner.dataset.blockKey;
-  const btn = key && document.querySelector(`.block-btn[data-block="${key}"]`);
-  if (btn) {
-    btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    selectBlock(btn);
-  } else {
-    showAlert('Ese tema todavía no tiene un bloque QBank propio desbloqueado — practicalo dentro de Mix Total mientras tanto.');
+  const items = gauntletProgress?.los_atrasados || [];
+  const backlogExtra = gauntletProgress?.los_atrasados_backlog_extra || 0;
+  if (!items.length && !backlogExtra) return;
+
+  const lines = items.map(it => {
+    const topicInfo = gauntletProgress.topics.find(t => t.topic === it.tema);
+    const temaLabel = topicInfo ? topicInfo.tema : it.tema;
+    return `• ${temaLabel} — ${losLabel(it)} (${it.dias_atraso}d)`;
+  });
+  let msg = lines.length
+    ? `Recuperables con un drill de hoy:\n${lines.join('\n')}`
+    : 'No hay LOS recuperables con un drill rápido hoy.';
+  if (backlogExtra) {
+    msg += `\n\n+ ${backlogExtra} LOS con más de ${LOS_ATRASO_BANDA_DIARIA_BANNER} días de atraso — backlog viejo, conviene una sesión de repaso dedicada en vez de forzarlos en una ronda del Gauntlet.`;
   }
+  showAlert(msg, 'Entendido');
 }
 
 async function graphGetJsonFile(path) {
