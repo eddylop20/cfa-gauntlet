@@ -1119,20 +1119,40 @@ async function graphGetJsonFile(path) {
   return resp.json();
 }
 
+// Extracción de Kaplan Learn: ~2% del QBank (54/2678, medido 2026-08-17,
+// concentrado en QM/FSA) tiene tablas financieras que quedaron pegadas sin
+// separadores entre celdas ("Sales150Cost of Goods Sold(48)..."). No hay
+// forma confiable de reconstruir la tabla del lado del cliente -- valores
+// como "3252" son en realidad dos columnas distintas (ej. 32 y 52, años
+// distintos) y partirlos a ciegas puede dar el número equivocado, peor que
+// no mostrar la pregunta. El fix real es re-extraer esas preguntas puntuales
+// preservando la estructura de la tabla (ver Docs/Actuales, método Kaplan
+// Learn) -- mientras tanto, se detectan y se excluyen acá, en vez de
+// mostrar contenido ilegible o potencialmente incorrecto durante el estudio.
+function looksLikeSquishedTable(text) {
+  let longest = "";
+  for (const run of (text || "").split(/\s+/)) {
+    if (run.length > longest.length) longest = run;
+  }
+  return longest.length >= 35 && /[a-zA-Z]/.test(longest) && /\d/.test(longest);
+}
+
 async function loadQBankTopic(blockKey) {
-  const cacheKey = "gauntlet_qbank_" + blockKey;
+  const cacheKey = "gauntlet_qbank_v2_" + blockKey; // v2: filtra tablas pegadas (antes cacheado sin filtrar)
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try { return JSON.parse(cached); } catch(e) {}
   }
   const src = QBANK_2027_SOURCES[blockKey];
   const questions = [];
+  let skipped = 0;
   for (const path of src.files) {
     const raw = await graphGetJsonFile(path);
     raw.forEach(q => {
       if (!q.module_los || !Array.isArray(q.options)) return;
       const correctIdx = q.options.findIndex(o => o.correct);
       if (correctIdx < 0) return;
+      if (looksLikeSquishedTable(q.question)) { skipped++; return; }
       questions.push({
         id: "K" + q.question_id,
         questionId: q.question_id,
@@ -1146,6 +1166,7 @@ async function loadQBankTopic(blockKey) {
       });
     });
   }
+  if (skipped) console.warn(`${blockKey}: ${skipped} pregunta(s) con tabla pegada excluida(s) (ver looksLikeSquishedTable)`);
   localStorage.setItem(cacheKey, JSON.stringify(questions));
   return questions;
 }
