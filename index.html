@@ -494,7 +494,6 @@ body::before {
 // ⚙️  CONFIGURACIÓN  —  reemplazar con tu Client ID
 // ══════════════════════════════════════════════════════
 const CLIENT_ID = "fecebd30-8309-4bbd-a11f-122f5a3c8e81";
-const EXCEL_ONEDRIVE_PATH = "CFA/CFA_Tutor_v1_clean.xlsx";
 
 // ══════════════════════════════════════════════════════
 // MSAL SETUP
@@ -512,7 +511,6 @@ const loginRequest = { scopes: ["Files.ReadWrite", "User.Read"] };
 
 let msalInstance = null;
 let accessToken = null;
-let worksheetIds = {};  // cache de IDs de worksheets
 
 function initMsal() {
   if (!CLIENT_ID || CLIENT_ID.length < 10) return;
@@ -596,85 +594,6 @@ function localDateStr() {
 // ══════════════════════════════════════════════════════
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
-async function graphCall(endpoint, method = "GET", body = null, extraHeaders = {}) {
-  if (!accessToken) throw new Error("No token");
-  const resp = await fetch(GRAPH + endpoint, {
-    method,
-    headers: {
-      "Authorization": "Bearer " + accessToken,
-      "Content-Type": "application/json",
-      ...extraHeaders
-    },
-    body: body ? JSON.stringify(body) : null
-  });
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(err.error?.message || `HTTP ${resp.status}`);
-  }
-  if (resp.status === 204) return null;
-  return resp.json();
-}
-
-// Sesión persistente de Excel — evita que cada llamada "despierte" el workbook desde cero
-// (el archivo tiene fórmulas pesadas y sin sesión el primer request suele expirar por timeout)
-let workbookSessionId = null;
-
-async function getWorkbookSession() {
-  if (workbookSessionId) return workbookSessionId;
-  const session = await graphCall(
-    `/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/createSession`,
-    "POST",
-    { persistChanges: true }
-  );
-  workbookSessionId = session.id;
-  return workbookSessionId;
-}
-
-async function getWorksheetId(sheetName, sessionHeader) {
-  if (worksheetIds[sheetName]) return worksheetIds[sheetName];
-  const data = await graphCall(`/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/worksheets`, "GET", null, sessionHeader);
-  data.value.forEach(ws => { worksheetIds[ws.name] = ws.id; });
-  return worksheetIds[sheetName];
-}
-
-// Próxima fila libre, mirando solo la columna A (Fecha) — evita el problema de usedRange
-// inflado por formato "fantasma" en otras columnas más abajo (ya nos pasó en 📝 Sesiones).
-async function getNextDataRow(wsId, sessionHeader) {
-  const usedA = await graphCall(
-    `/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/worksheets/${wsId}/range(address='A:A')/usedRange?$select=rowCount`,
-    "GET", null, sessionHeader
-  ).catch(() => null);
-  return (usedA?.rowCount || 2) + 1;
-}
-
-async function appendErroresRows(errores, sessionHeader) {
-  if (!errores.length) return;
-  const wsId = await getWorksheetId("❌ Errores", sessionHeader);
-  if (!wsId) throw new Error("Worksheet '❌ Errores' no encontrado");
-  const nextRow = await getNextDataRow(wsId, sessionHeader);
-  const today = localDateStr();
-
-  const rows = errores.map(e => [
-    today,
-    e.tema,
-    e.subtema || "",
-    "Conceptual",
-    `Gauntlet · ${e.block} · ${e.id}: ${e.questionText.slice(0, 120)}`,
-    e.chosenText,
-    e.anchor,
-    "No",
-    0,
-    "Pendiente"
-  ]);
-  const rangeAddr = `A${nextRow}:J${nextRow + rows.length - 1}`;
-  await graphCall(
-    `/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/worksheets/${wsId}/range(address='${rangeAddr}')`,
-    "PATCH",
-    { values: rows },
-    sessionHeader
-  );
-}
-
 // responses_log.csv vive suelto en la carpeta (no es parte del workbook) — se lee y reescribe entero.
 function csvField(v) {
   const s = String(v ?? "");
@@ -713,68 +632,81 @@ async function appendResponsesLog(rows, sesionId) {
   if (!putResp.ok) throw new Error(`No se pudo guardar responses_log.csv (HTTP ${putResp.status})`);
 }
 
-async function logSessionToExcel(sessionData, isRetry = false) {
+// Bandeja de entrada — el Gauntlet NO toca el workbook de Excel directamente (la API de
+// Workbook resultó frágil para escrituras en vivo: sesiones que vencen, usedRange con
+// formato fantasma, y sobre todo la copia local de OneDrive puede atrasarse respecto al
+// servidor sin avisar, con riesgo real de pisar datos si algo edita el archivo mientras
+// tanto). En su lugar, apendea a estos dos JSON planos — mismo mecanismo simple y robusto
+// que ya usa responses_log.csv. Tu recalc.py los "drena" hacia el Excel en el momento
+// controlado (corrida nocturna o manual), reusando tu propio log_session.py.
+async function appendJsonInbox(path, newItems) {
+  if (!newItems.length) return;
+  let arr = [];
+  const getResp = await fetch(`${GRAPH}/me/drive/root:/CFA/${path}:/content`, {
+    headers: { "Authorization": "Bearer " + accessToken }
+  });
+  if (getResp.ok) {
+    try {
+      const parsed = JSON.parse(await getResp.text());
+      if (Array.isArray(parsed)) arr = parsed;
+    } catch(e) { arr = []; }
+  } else if (getResp.status !== 404) {
+    throw new Error(`No se pudo leer ${path} (HTTP ${getResp.status})`);
+  }
+  arr.push(...newItems);
+  const putResp = await fetch(`${GRAPH}/me/drive/root:/CFA/${path}:/content`, {
+    method: "PUT",
+    headers: { "Authorization": "Bearer " + accessToken, "Content-Type": "application/json" },
+    body: JSON.stringify(arr, null, 2)
+  });
+  if (!putResp.ok) throw new Error(`No se pudo guardar ${path} (HTTP ${putResp.status})`);
+}
+
+async function logSessionToExcel(sessionData) {
   updateSyncBadge('syncing');
   try {
-    const sessionHeader = { "workbook-session-id": await getWorkbookSession() };
-
-    // Obtener ID del worksheet Sesiones
-    const wsId = await getWorksheetId("📝 Sesiones", sessionHeader);
-    if (!wsId) throw new Error("Worksheet '📝 Sesiones' no encontrado");
-    const nextRow = await getNextDataRow(wsId, sessionHeader);
-
-    // Preparar fila de datos
     const today = localDateStr();
     const pct = sessionData.correct / sessionData.total;
     const confianza = sessionData.avgConfianza || null;
-    const gap = confianza ? Math.round((confianza/5 - pct) * 1000) / 1000 : null;
 
-    const row = [[
-      today,
-      sessionData.tema,
-      sessionData.subtema || sessionData.block,
-      "CFA Gauntlet",
-      sessionData.total,
-      sessionData.correct,
-      pct,
-      sessionData.minutes,
-      `Gauntlet · ${sessionData.block} · ${sessionData.correct}/${sessionData.total}`,
-      confianza,
-      gap
-    ]];
-
-    // Escribir al Excel
-    const rangeAddr = `A${nextRow}:K${nextRow}`;
-    await graphCall(
-      `/me/drive/root:/${EXCEL_ONEDRIVE_PATH}:/workbook/worksheets/${wsId}/range(address='${rangeAddr}')`,
-      "PATCH",
-      { values: row },
-      sessionHeader
-    );
+    await appendJsonInbox("scripts/gauntlet_inbox_sessions.json", [{
+      fecha: today,
+      tema: sessionData.tema,
+      subtema: sessionData.subtema || sessionData.block,
+      fuente: "CFA Gauntlet",
+      preguntas: sessionData.total,
+      correctas: sessionData.correct,
+      minutos: sessionData.minutes,
+      notas: `Gauntlet · ${sessionData.block} · ${sessionData.correct}/${sessionData.total}`,
+      confianza_prom: confianza
+    }]);
 
     // Errores + responses_log — alimentan tu pipeline real (LOS Breakdown, Dashboard, Repaso, Triage vía recalc.py)
     const sesionId = `gauntlet_${today}_${Date.now()}`;
     const responses = sessionData.responses || [];
     const misses = responses.filter(r => !r.correct);
-    let errorCount = 0;
     if (misses.length) {
-      await appendErroresRows(misses, sessionHeader);
-      errorCount = misses.length;
+      await appendJsonInbox("scripts/gauntlet_inbox_errors.json", misses.map(e => ({
+        fecha: e.fecha || today,
+        tema: e.tema,
+        subtema: e.subtema || "",
+        tipo_error: "Conceptual",
+        concepto: `Gauntlet · ${e.block} · ${e.id}: ${e.questionText.slice(0, 120)}`,
+        error_cometido: e.chosenText,
+        correccion: e.anchor,
+        trampa: false,
+        reps: 0,
+        estado: "Pendiente"
+      })));
     }
     if (responses.length) {
       await appendResponsesLog(responses, sesionId);
     }
 
     updateSyncBadge('online');
-    return { ok: true, errorCount };
+    return { ok: true, errorCount: misses.length };
   } catch(e) {
     console.error("Sync error:", e);
-    // Timeout de arranque en frío del workbook — la sesión suele quedar inválida, se descarta y se reintenta una vez
-    if (!isRetry) {
-      workbookSessionId = null;
-      await new Promise(r => setTimeout(r, 1500));
-      return logSessionToExcel(sessionData, true);
-    }
     updateSyncBadge('offline');
     return { ok: false, error: e.message };
   }
@@ -1001,7 +933,7 @@ async function finishFlashDaily() {
   syncEl.style.display = 'flex';
   if (accessToken) {
     syncEl.className = 'sync-result pending';
-    syncEl.innerHTML = '⟳ Guardando reto en el Excel...';
+    syncEl.innerHTML = '⟳ Guardando reto...';
     const result = await logSessionToExcel({
       block: "Reto del Día", tema, subtema: "Reto del Día",
       total, correct, minutes: 1, responses
@@ -1420,7 +1352,7 @@ async function showResults() {
   if (accessToken) {
     syncEl.style.display = 'flex';
     syncEl.className = 'sync-result pending';
-    syncEl.innerHTML = '⟳ Guardando sesión en el Excel...';
+    syncEl.innerHTML = '⟳ Guardando sesión...';
 
     const result = await logSessionToExcel({
       block: state.block,
@@ -1433,8 +1365,8 @@ async function showResults() {
     if (result.ok) {
       syncEl.className = 'sync-result ok';
       syncEl.innerHTML = result.errorCount
-        ? `✓ Sesión + ${result.errorCount} error${result.errorCount > 1 ? 'es' : ''} guardados en el tracker (Sesiones, Errores, LOS Breakdown).`
-        : '✓ Sesión guardada en CFA_Tutor_v1_clean.xlsx — visible en el dashboard.';
+        ? `✓ Sesión + ${result.errorCount} error${result.errorCount > 1 ? 'es' : ''} en cola para tu tracker — entran en el próximo recalc.py (LOS Breakdown ya quedó actualizado).`
+        : '✓ Sesión en cola para tu tracker — entra en el próximo recalc.py.';
     } else {
       syncEl.className = 'sync-result err';
       syncEl.innerHTML = `⚠️ No se pudo sincronizar: ${result.error}. Reconectá la cuenta desde el badge superior.`;
