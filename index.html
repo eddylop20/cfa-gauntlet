@@ -89,6 +89,21 @@ body::before {
   font-size: 0.65rem; font-weight: 700; padding: 2px 7px; border-radius: 7px;
   background: rgba(245,158,11,0.12); color: var(--warning); border: 1px solid rgba(245,158,11,0.25);
 }
+.block-btn.locked { cursor: default; opacity: 0.5; }
+.block-btn.locked:hover { border-color: var(--border); background: var(--surface); }
+.block-btn.locked .b-badge { background: rgba(148,163,184,0.12); color: var(--muted); border-color: rgba(148,163,184,0.25); }
+
+/* Banner de LOS atrasado — misma señal que el email de warmup (recalc.py -> gauntlet_progress.json) */
+.atraso-banner {
+  width: 100%; padding: 13px 16px; border-radius: 13px; cursor: pointer;
+  background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.3);
+  display: flex; align-items: center; gap: 12px; text-align: left; transition: all 0.2s;
+}
+.atraso-banner:hover { border-color: rgba(167,139,250,0.55); transform: translateY(-1px); }
+.atraso-icon { font-size: 1.3rem; flex-shrink: 0; }
+.atraso-text { flex: 1; font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
+.atraso-text strong { color: #c4b5fd; display: block; font-size: 0.9rem; margin-bottom: 2px; }
+.atraso-arrow { color: #c4b5fd; font-size: 1.1rem; flex-shrink: 0; }
 
 .start-btn {
   width: 100%; padding: 17px; background: linear-gradient(135deg,var(--accent),#4f46e5);
@@ -356,8 +371,17 @@ body::before {
     <div class="flash-cta-arrow">→</div>
   </button>
 
+  <div class="atraso-banner" id="atraso-banner" style="display:none;" onclick="jumpToAtraso()">
+    <div class="atraso-icon">🔁</div>
+    <div class="atraso-text">
+      <strong id="atraso-title">Hoy te toca reforzar</strong>
+      <span id="atraso-sub"></span>
+    </div>
+    <div class="atraso-arrow">→</div>
+  </div>
+
   <div class="section-lbl">Seleccioná el bloque</div>
-  <div class="block-grid">
+  <div class="block-grid" id="block-grid">
     <button class="block-btn" data-block="FSA" data-tema="Financial Statement Analysis" onclick="selectBlock(this)">
       <div class="b-name">FSA — DTA/DTL</div>
       <div class="b-meta">Income Taxes · Module 35</div>
@@ -365,7 +389,7 @@ body::before {
     </button>
     <button class="block-btn" data-block="Mix" data-tema="Financial Statement Analysis" onclick="selectBlock(this)">
       <div class="b-name">Mix Total</div>
-      <div class="b-meta">Ethics + FSA · todo el QBank</div>
+      <div class="b-meta" id="mix-meta">Ethics + FSA · todo el QBank</div>
       <div class="b-badge">~880 preguntas</div>
     </button>
     <button class="block-btn" data-block="Ethics2" data-tema="Ethics & Professional Standards" onclick="selectBlock(this)">
@@ -571,6 +595,7 @@ function setToken(token) {
   accessToken = token;
   updateSyncBadge('online');
   document.getElementById('auth-cta').style.display = 'none';
+  loadGauntletProgress();
 }
 
 function updateSyncBadge(state) {
@@ -811,7 +836,12 @@ const BANK = {
 // QBANK 2027 — banco completo, leído en vivo desde OneDrive (privado)
 // Solo preguntas con module_los, así alimentan LOS Breakdown de verdad.
 // ══════════════════════════════════════════════════════
-const QBANK_2027_SOURCES = {
+// `let`, no `const` — QM/Equity/etc. se agregan en runtime una vez que carga
+// gauntlet_progress.json (ver renderTopicBlocks). Si no carga (offline, sin
+// login, o corriste antes de que recalc.py generara el archivo por primera
+// vez), quedan solo estos 2 — exactamente el comportamiento de antes de esta
+// feature, sin regresión.
+let QBANK_2027_SOURCES = {
   Ethics2027: {
     tema: "Ethics & Professional Standards",
     label: "Ethics — Full QBank",
@@ -834,8 +864,9 @@ const QBANK_2027_SOURCES = {
 
 // Bloques derivados — se construyen a partir de los pools de arriba una vez cargados,
 // no son un fetch aparte. FSA-DTA/DTL filtra por Module 35 (Income Taxes, confirmado
-// contra el JSON real); Mix combina ambos pools completos.
-const DERIVED_BLOCKS = {
+// contra el JSON real); Mix combina TODOS los pools 2027 actualmente registrados en
+// QBANK_2027_SOURCES (crece solo a medida que se desbloquean temas nuevos).
+let DERIVED_BLOCKS = {
   FSA: {
     tema: "Financial Statement Analysis",
     label: "FSA — DTA/DTL",
@@ -845,10 +876,107 @@ const DERIVED_BLOCKS = {
   Mix: {
     tema: null,
     label: "Mix Total",
-    requires: ["Ethics2027", "FSA2027"],
-    build: () => [...(BANK.Ethics2027 || []), ...(BANK.FSA2027 || [])]
+    get requires() { return Object.keys(QBANK_2027_SOURCES); },
+    build: () => Object.keys(QBANK_2027_SOURCES).flatMap(k => BANK[k] || [])
   }
 };
+
+// ══════════════════════════════════════════════════════
+// PROGRESO REAL (Plan 2027) — que temas ya desbloqueaste + que LOS estan
+// atrasados. Lo escribe recalc.py en cada corrida (_write_gauntlet_progress,
+// mismo mecanismo que flash_daily.json) leyendo la hoja 📅 Plan 2027 y el
+// LOS Schedule que ya alimenta el email de warmup — no es un segundo sistema
+// de repeticion espaciada, es el mismo expuesto aca.
+// ══════════════════════════════════════════════════════
+const GAUNTLET_PROGRESS_PATH = "scripts/gauntlet_progress.json";
+let gauntletProgress = null;
+
+async function loadGauntletProgress() {
+  try {
+    gauntletProgress = await graphGetJsonFile(GAUNTLET_PROGRESS_PATH);
+  } catch(e) {
+    gauntletProgress = null;
+    return;
+  }
+  renderTopicBlocks();
+  renderAtrasoBanner();
+}
+
+function safeBlockKey(topic) {
+  return topic.replace(/\s+/g, "") + "2027";
+}
+
+// Agrega un botón de bloque por cada Topic de Plan 2027 que todavía no tiene
+// uno hardcodeado en el HTML (FSA y ETICA ya lo tienen). Los desbloqueados
+// quedan clickeables como cualquier otro bloque QBank; los bloqueados se
+// muestran igual (con 🔒 y fecha) para que siempre veas hacia dónde vas —
+// mismo criterio que el mapa de rutas de las flashcards.
+function renderTopicBlocks() {
+  if (!gauntletProgress) return;
+  const grid = document.getElementById('block-grid');
+  document.querySelectorAll('.block-btn[data-generated]').forEach(b => b.remove());
+
+  gauntletProgress.topics.forEach(t => {
+    if (t.topic === "FSA" || t.topic === "ETICA") return; // ya tienen boton propio en el HTML
+    const key = safeBlockKey(t.topic);
+    if (t.unlocked && t.qbank_files.length) {
+      QBANK_2027_SOURCES[key] = { tema: t.tema, label: t.tema + " — Full QBank", files: t.qbank_files };
+      const btn = document.createElement('button');
+      btn.className = 'block-btn';
+      btn.dataset.generated = '1';
+      btn.dataset.block = key;
+      btn.dataset.tema = t.tema;
+      btn.setAttribute('onclick', 'selectBlock(this)');
+      btn.innerHTML = `<div class="b-name">${t.tema} — Full QBank</div>
+        <div class="b-meta">Todo el QBank 2027 · con LOS</div>
+        <div class="b-badge">nuevo</div>`;
+      grid.appendChild(btn);
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'block-btn locked';
+      btn.dataset.generated = '1';
+      btn.innerHTML = `<div class="b-name">🔒 ${t.tema}</div>
+        <div class="b-meta">Se desbloquea ${t.starts_at || '—'}</div>
+        <div class="b-badge">bloqueado</div>`;
+      btn.onclick = () => showAlert(`${t.tema} se habilita cuando arranca esa semana en tu Plan 2027 (${t.starts_at || 'fecha por definir'}), o antes si marcás esa semana como Completada.`);
+      grid.appendChild(btn);
+    }
+  });
+
+  const mixMeta = document.getElementById('mix-meta');
+  if (mixMeta) {
+    const temas = [...new Set(Object.values(QBANK_2027_SOURCES).map(s => s.tema))];
+    mixMeta.textContent = temas.join(' + ') + ' · todo el QBank desbloqueado';
+  }
+}
+
+// Banner "Hoy te toca reforzar" — el primer item de los_atrasados ya viene
+// priorizado (recuperables antes que backlog viejo, ver email_study.get_los_atrasados),
+// asi que la sugerencia coincide con la del email de warmup.
+function renderAtrasoBanner() {
+  const banner = document.getElementById('atraso-banner');
+  const items = gauntletProgress?.los_atrasados || [];
+  if (!items.length) { banner.style.display = 'none'; return; }
+  const top = items[0];
+  const topicInfo = gauntletProgress.topics.find(t => t.topic === top.tema);
+  const temaLabel = topicInfo ? topicInfo.tema : top.tema;
+  document.getElementById('atraso-sub').textContent =
+    `${temaLabel} · ${top.descripcion || top.los_code} — atrasado ${top.dias_atraso} día${top.dias_atraso === 1 ? '' : 's'}`;
+  banner.dataset.blockKey = topicInfo && topicInfo.unlocked ? safeBlockKey(top.tema) : '';
+  banner.style.display = 'flex';
+}
+
+function jumpToAtraso() {
+  const banner = document.getElementById('atraso-banner');
+  const key = banner.dataset.blockKey;
+  const btn = key && document.querySelector(`.block-btn[data-block="${key}"]`);
+  if (btn) {
+    btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    selectBlock(btn);
+  } else {
+    showAlert('Ese tema todavía no tiene un bloque QBank propio desbloqueado — practicalo dentro de Mix Total mientras tanto.');
+  }
+}
 
 async function graphGetJsonFile(path) {
   const resp = await fetch(`${GRAPH}/me/drive/root:/CFA/${path}:/content`, {
